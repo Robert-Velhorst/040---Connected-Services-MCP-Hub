@@ -1,5 +1,7 @@
 # Trello MCP Server (Enhanced)
 
+> Historical snapshot. Current install and runtime guidance is maintained in [README.md](README.md).
+
 A powerful MCP server for interacting with Trello boards, lists, cards, and workspaces via AI Hosts. Now with comprehensive validation, enhanced error handling, and full CRUD operations for boards and workspaces.
 
 ## 🎉 What's New in Version 2.0

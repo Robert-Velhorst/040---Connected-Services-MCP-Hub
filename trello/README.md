@@ -17,18 +17,17 @@ compatibility aliases.
 ```powershell
 Copy-Item .env.example .env
 # Set TRELLO_API_KEY and TRELLO_TOKEN in .env.
-uv sync --locked --python 3.13
+uv sync --locked --python 3.15
 ```
 
-Use Python 3.12 or 3.13. The committed lockfile currently cannot install on
-Python 3.14 because of its pinned `pydantic-core` package.
+Use Python 3.15, the service runtime and lockfile target.
 
 ## Run modes
 
 For local stdio/Claude-app mode, leave `USE_CLAUDE_APP=true` and run:
 
 ```powershell
-uv run --python 3.13 python main.py
+uv run --python 3.15 python main.py
 ```
 
 For a network MCP connection such as ChatGPT, set these values in `.env`:
@@ -57,5 +56,5 @@ for the project's full handling guidance.
 ## Validation
 
 ```powershell
-uv run --python 3.13 --with pytest pytest -q
+uv run --python 3.15 --with pytest pytest -q
 ```

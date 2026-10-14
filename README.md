@@ -45,8 +45,8 @@ Copy-Item .env.example .env
 # TRELLO_READ_ONLY=true
 # For a network MCP connection, set:
 # USE_CLAUDE_APP=false
-uv sync --locked --python 3.13
-uv run --python 3.13 python main.py
+uv sync --locked --python 3.15
+uv run --python 3.15 python main.py
 ```
 
 `TRELLO_READ_ONLY=true` is a server-side access boundary: mutation tools are

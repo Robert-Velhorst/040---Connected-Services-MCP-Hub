@@ -1,6 +1,6 @@
 """Compatibility tools retained from the former lightweight Trello server."""
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from server.dtos.update_card import UpdateCardPayload
 from server.tools import board, card, workspace

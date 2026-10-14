@@ -4,7 +4,7 @@ MCP tools for export, import, and template operations.
 """
 
 import json
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from server.trello import client
 from server.services.export import ExportService
 from server.validators.validation_service import ValidationService

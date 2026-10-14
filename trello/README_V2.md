@@ -1,5 +1,7 @@
 # Trello MCP Server - Version 2.0
 
+> Historical snapshot. Current install and runtime guidance is maintained in [README.md](README.md).
+
 A comprehensive Model Context Protocol (MCP) server for Trello automation, providing complete CRUD operations and real-time integration capabilities.
 
 ## 🚀 Features
