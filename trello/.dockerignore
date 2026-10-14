@@ -1,0 +1,25 @@
+# Keep the build context small and never bake secrets into the image.
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Credentials are passed at run time via --env-file, never copied in.
+.env
+
+*.log
+*.db
+*.db-wal
+*.db-shm
+
+# Docs and historical notes are not needed at run time.
+*.md
+!README.md
+Dockerfile
+docker-compose.yml
+uv.lock
+test_*.py
+setup_codex.py

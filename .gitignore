@@ -1,6 +1,21 @@
+# Credentials - never commit
 .env
-*.log
+**/.env
+
+# Local operator notes, not for publication
+RUNBOOK-live-setup.md
+
+# Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .venv/
 **/.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime artefacts
+*.log
+*.db
+*.db-wal
+*.db-shm

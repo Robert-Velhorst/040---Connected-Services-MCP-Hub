@@ -67,6 +67,34 @@ async def get_cards(
         raise
 
 
+async def get_board_cards(
+    ctx: Context, board_id: str, include_archived: bool = True
+) -> List[TrelloCard]:
+    """Retrieves EVERY card on a board in a single request, with all content.
+
+    Prefer this over walking lists and calling get_cards per list. Includes
+    checklists, custom field values, attachments and members, and by default
+    includes archived cards, which Trello's normal card listing hides.
+
+    Args:
+        board_id (str): The ID of the board.
+        include_archived (bool): Include archived cards. Defaults to True.
+
+    Returns:
+        List[TrelloCard]: All cards on the board.
+    """
+    try:
+        logger.info(f"Getting all cards for board: {board_id}")
+        result = await service.get_board_cards(board_id, include_archived=include_archived)
+        logger.info(f"Successfully retrieved {len(result)} cards for board: {board_id}")
+        return result
+    except Exception as e:
+        error_msg = f"Failed to get board cards: {str(e)}"
+        logger.error(error_msg)
+        await ctx.error(error_msg)
+        raise
+
+
 async def create_card(ctx: Context, payload: CreateCardPayload) -> TrelloCard:
     """Creates a new card in a given list.
 
