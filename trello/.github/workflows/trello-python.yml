@@ -2,7 +2,7 @@ name: Trello Python quality
 
 on:
   push:
-    branches: [main]
+    branches: [main, "codex/**"]
     paths:
       - "trello/**"
       - ".github/workflows/trello-python.yml"
