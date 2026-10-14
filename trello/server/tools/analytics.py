@@ -4,7 +4,7 @@ MCP tools for analytics and reporting.
 """
 
 import json
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from server.trello import client
 from server.services.analytics import AnalyticsService
 from server.validators.validation_service import ValidationService

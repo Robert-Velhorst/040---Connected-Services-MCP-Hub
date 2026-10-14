@@ -1,16 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.15.0-slim-bookworm@sha256:122756f3fe72c4f5d3d71897888204ee85774bc79de952555b8a474e1d0a5d53
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
+# Install the project tools and locked runtime dependencies for Python 3.15.
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir uv && \
-    uv pip install --system -e .
+RUN pip install --no-cache-dir uv==0.13.1 && \
+    uv sync --locked --no-dev --python 3.15.0
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY . .

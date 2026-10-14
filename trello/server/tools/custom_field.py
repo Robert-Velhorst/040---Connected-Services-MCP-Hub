@@ -2,7 +2,7 @@
 MCP tools for custom field operations.
 """
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from server.services.custom_field import CustomFieldService
 from server.dtos.create_custom_field import CreateCustomFieldPayload
 from server.dtos.set_custom_field_value import SetCustomFieldValuePayload

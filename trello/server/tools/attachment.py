@@ -5,7 +5,7 @@ This module contains tools for managing Trello card attachments.
 import logging
 from typing import List
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from server.models import TrelloAttachment
 from server.dtos.attach_url import AttachUrlPayload

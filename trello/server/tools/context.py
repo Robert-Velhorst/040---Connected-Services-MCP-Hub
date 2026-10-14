@@ -1,6 +1,6 @@
 """MCP tools for selecting a default Trello board and workspace per session."""
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from server.active_context import active_context
 
