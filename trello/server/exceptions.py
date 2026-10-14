@@ -69,6 +69,24 @@ class ConflictError(TrelloMCPError):
         super().__init__(message, status_code=409)
 
 
+class TransientBlockError(TrelloMCPError):
+    """Raised when Trello's edge returns a bot-check page instead of JSON.
+
+    Trello intermittently answers a perfectly valid API request with HTTP 405
+    and an HTML "Human Verification" body. Measured on a real account this hit
+    roughly 8-10% of requests, was uncorrelated with payload size (a two-field
+    query was blocked while a 1.5 MB nested query succeeded), and cleared on
+    retry within ~2 seconds. It is transient, so it must be retried rather than
+    surfaced -- an unretried 405 kills a multi-board crawl partway through.
+    """
+
+    def __init__(self, endpoint: str, status_code: int = 405):
+        super().__init__(
+            f"Trello edge temporarily blocked {endpoint} (HTTP {status_code}); retrying.",
+            status_code=status_code,
+        )
+
+
 class BadRequestError(TrelloMCPError):
     """Raised when the request is malformed or invalid (400)."""
 

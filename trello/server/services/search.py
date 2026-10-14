@@ -39,16 +39,28 @@ class SearchService:
         Returns:
             Dictionary containing search results by type
         """
-        params = {"query": query}
+        params: Dict[str, Any] = {
+            "query": query,
+            # Trello caps results at 10 per model type unless asked otherwise.
+            # 1000 is the documented ceiling; 2000 returns HTTP 400.
+            "cards_limit": 1000,
+            "boards_limit": 1000,
+            "organizations_limit": 1000,
+            "card_fields": "all",
+            "card_board": "true",
+            "card_list": "true",
+            # Prefix matching is off by default, so "invoic" would miss
+            # "invoices". Callers can still disable it explicitly.
+            "partial": "true" if partial else "false",
+        }
 
-        if id_boards:
-            params["idBoards"] = id_boards
+        # Without idBoards the search silently narrows; "mine" spans every
+        # board the token can reach.
+        params["idBoards"] = id_boards or "mine"
         if id_organizations:
             params["idOrganizations"] = id_organizations
         if model_types:
             params["modelTypes"] = model_types
-        if partial:
-            params["partial"] = "true"
 
         return await self.client.GET("/search", params=params)
 

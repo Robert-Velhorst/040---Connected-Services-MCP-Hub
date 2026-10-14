@@ -19,7 +19,7 @@ async def search_trello(
     board_ids: str = None,
     organization_ids: str = None,
     model_types: str = None,
-    partial: bool = False
+    partial: bool = True
 ) -> str:
     """
     Search across Trello resources (cards, boards, members, organizations).
@@ -36,7 +36,13 @@ async def search_trello(
         board_ids: Comma-separated list of board IDs to limit search
         organization_ids: Comma-separated list of organization IDs to limit search
         model_types: Comma-separated list of types to search (cards, boards, members, organizations)
-        partial: Enable partial matching (default False)
+        partial: Enable prefix matching so "invoic" also matches "invoices" (default True)
+
+    Note:
+        This queries Trello live and is capped by Trello's own search index.
+        For exhaustive coverage across all boards -- including archived cards
+        and checklist text, which Trello's search does not index -- prefer
+        trello_search_cards, which reads the complete local mirror.
 
     Returns:
         JSON string containing search results grouped by type

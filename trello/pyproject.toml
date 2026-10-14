@@ -6,5 +6,20 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
-    "mcp[cli]>=1.17.0",
+    # Upper bound is required, not cautious: mcp 2.0 removed
+    # `mcp.server.fastmcp`, which every tool module imports. An unpinned
+    # install resolves to 2.x and the server fails at import with
+    # ModuleNotFoundError. The committed uv.lock pins 1.25.0.
+    "mcp[cli]>=1.17.0,<2",
+    # Imported by server/settings.py; previously undeclared, so a clean
+    # install produced ModuleNotFoundError at import time.
+    "python-dotenv>=1.0.0",
+    # Native Windows setup stores the user token in Credential Manager rather
+    # than a project .env file.
+    "keyring>=25.0.0",
+    # Imported by main.py for Streamable HTTP mode; likewise undeclared.
+    "uvicorn>=0.30.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]

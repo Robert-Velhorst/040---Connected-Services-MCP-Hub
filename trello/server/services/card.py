@@ -16,21 +16,67 @@ class CardService:
     def __init__(self, client: TrelloClient):
         self.client = client
 
+    # Requesting these explicitly is what makes a card complete. Without
+    # `checklists` and `customFieldItems` Trello omits them entirely, which is
+    # the bulk of the content on this account (13k+ check items overall).
+    FULL_CARD_PARAMS = {
+        "fields": "all",
+        "attachments": "true",
+        "attachment_fields": "all",
+        "members": "true",
+        "member_fields": "all",
+        "checklists": "all",
+        "checkItemStates": "true",
+        "customFieldItems": "true",
+        "stickers": "true",
+        "pluginData": "true",
+        "actions": "commentCard",
+        "actions_limit": "1000",
+    }
+
     async def get_card(self, card_id: str) -> TrelloCard:
-        """Retrieves a specific card by its ID.
+        """Retrieves a specific card by its ID, with all nested content.
 
         Args:
             card_id (str): The ID of the card to retrieve.
 
         Returns:
-            TrelloCard: The card object containing card details.
+            TrelloCard: The card object including checklists, custom field
+            values, attachments, members and comments.
         """
         response = await self.client.GET(
-            f"/cards/{card_id}",
-            params={"attachments": "true", "actions": "commentCard"},
+            f"/cards/{card_id}", params=dict(self.FULL_CARD_PARAMS)
         )
         response["comments"] = self._parse_comments(response.get("actions", []))
         return TrelloCard(**response)
+
+    async def get_board_cards(
+        self, board_id: str, include_archived: bool = True
+    ) -> List[TrelloCard]:
+        """Retrieves every card on a board in one request.
+
+        Args:
+            board_id (str): The ID of the board.
+            include_archived (bool): Include archived cards. Trello's default
+                listing hides them -- on the reference board that is 99 of 131
+                cards -- so this defaults to True.
+
+        Returns:
+            List[TrelloCard]: All cards, with checklists and custom fields.
+        """
+        params = {
+            "fields": "all",
+            "attachments": "true",
+            "checklists": "all",
+            "customFieldItems": "true",
+            "members": "true",
+        }
+        # `/cards/all` returns open + archived; `/cards` returns open only.
+        suffix = "all" if include_archived else "open"
+        response = await self.client.GET(f"/boards/{board_id}/cards/{suffix}", params=params)
+        if not isinstance(response, list):
+            return []
+        return [TrelloCard(**card) for card in response]
 
     async def get_cards(
         self,
@@ -120,16 +166,28 @@ class CardService:
         response = await self.client.PUT(f"/cards/{card_id}", data={"closed": True})
         return TrelloCard(**response)
 
-    async def get_card_comments(self, card_id: str) -> List[Dict[str, Any]]:
+    async def get_card_comments(
+        self, card_id: str, limit: int = 1000
+    ) -> List[Dict[str, Any]]:
         """Retrieves all comments on a card.
 
         Args:
             card_id (str): The ID of the card.
+            limit (int): Maximum comments to return. Trello defaults action
+                listings to 50 and caps `limit` at 1000, so this passes the
+                ceiling explicitly rather than silently truncating at 50.
 
         Returns:
             List[Dict[str, Any]]: A list of comment action objects.
         """
-        return await self.client.GET(f"/cards/{card_id}/actions", params={"filter": "commentCard"})
+        return await self.client.GET(
+            f"/cards/{card_id}/actions",
+            params={
+                "filter": "commentCard",
+                "limit": max(1, min(int(limit), 1000)),
+                "memberCreator": "true",
+            },
+        )
 
     async def add_comment_to_card(self, card_id: str, text: str) -> Dict[str, Any]:
         """Adds a comment to a card.
@@ -178,8 +236,21 @@ class CardService:
         Returns:
             List[TrelloCard]: A list of matching card objects.
         """
-        params: Dict[str, Any] = {"query": query, "modelTypes": "cards"}
-        if board_id:
-            params["idBoards"] = board_id
+        params: Dict[str, Any] = {
+            "query": query,
+            "modelTypes": "cards",
+            # Trello defaults cards_limit to 10 and rejects anything above
+            # 1000. Omitting it capped every search at 10 hits.
+            "cards_limit": 1000,
+            "partial": "true",
+            "card_fields": "all",
+            "card_board": "true",
+            "card_list": "true",
+            "card_attachments": "true",
+            "cards_page": 0,
+        }
+        params["idBoards"] = board_id if board_id else "mine"
         response = await self.client.GET("/search", params=params)
+        if not isinstance(response, dict):
+            return []
         return [TrelloCard(**card) for card in response.get("cards", [])]

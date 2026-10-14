@@ -37,7 +37,15 @@ class BoardService:
         Returns:
             List[TrelloBoard]: A list of board objects.
         """
-        response = await self.client.GET(f"/members/{member_id}/boards")
+        # `filter=all` keeps closed boards in scope; they still hold historic
+        # cards that a complete analysis needs.
+        response = await self.client.GET(
+            f"/members/{member_id}/boards",
+            params={
+                "filter": "all",
+                "fields": "id,name,desc,closed,idOrganization,url,shortLink,dateLastActivity",
+            },
+        )
         return [TrelloBoard(**board) for board in response]
 
     async def get_board_labels(self, board_id: str) -> List[TrelloLabel]:
