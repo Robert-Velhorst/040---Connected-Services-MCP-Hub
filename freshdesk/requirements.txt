@@ -7,4 +7,4 @@ python-dotenv>=1.0.0
 colorama>=0.4.6
 
 # Type hinting (optional)
-typing-extensions>=4.8.0
+typing-extensions>=4.16.0
