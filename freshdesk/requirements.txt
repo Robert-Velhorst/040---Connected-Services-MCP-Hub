@@ -1,6 +1,6 @@
 # Core Dependencies
 fastmcp>=4.1.0
-requests>=2.31.0
+requests>=2.34.2
 python-dotenv>=1.2.4
 
 # Logging & Utility (optional but recommended)
