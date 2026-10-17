@@ -1,26 +1,26 @@
 version: 2
 updates:
-- package-ecosystem: docker
-  directory: /trello
-  schedule:
-    interval: weekly
-  open-pull-requests-limit: 5
-- package-ecosystem: docker-compose
-  directory: /trello
-  schedule:
-    interval: weekly
-  open-pull-requests-limit: 5
-- package-ecosystem: pip
-  directory: /freshdesk
-  schedule:
-    interval: weekly
-  open-pull-requests-limit: 5
-- package-ecosystem: pip
-  directory: /trello
-  schedule:
-    interval: weekly
-  open-pull-requests-limit: 5
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: docker
+    directory: /trello
     schedule:
-      interval: "weekly"
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker-compose
+    directory: /trello
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pip
+    directory: /freshdesk
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pip
+    directory: /trello
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
