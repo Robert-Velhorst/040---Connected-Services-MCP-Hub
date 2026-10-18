@@ -4,6 +4,7 @@ import os
 
 from mcp.types import ToolAnnotations
 
+from server import settings
 from server.tools import (
     advanced_card,
     analytics,
@@ -13,6 +14,7 @@ from server.tools import (
     card,
     checklist,
     comment,
+    complete,
     context,
     custom_field,
     export,
@@ -47,12 +49,9 @@ def _register(mcp, tools, *, read_only: bool) -> None:
 
 
 def _read_only_from_environment() -> bool:
-    return os.getenv("TRELLO_READ_ONLY", "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    # Delegated to settings so the flag resolves identically whether the value
+    # comes from the MCP client's env block or the package-anchored .env.
+    return settings.read_only()
 
 
 def register_tools(mcp, *, read_only: bool | None = None):
@@ -63,6 +62,28 @@ def register_tools(mcp, *, read_only: bool | None = None):
     """
     if read_only is None:
         read_only = _read_only_from_environment()
+
+    # Cache-backed tools first: they are the ones that can answer questions
+    # spanning all 85 boards inside Codex's 60s tool timeout, so they should be
+    # the most prominent in tool discovery. All of them are strictly read-only
+    # (trello_refresh only *reads* from Trello into the local mirror).
+    if settings.cache_enabled():
+        _register(
+            mcp,
+            (
+                complete.trello_search_cards,
+                complete.trello_get_card,
+                complete.trello_list_boards,
+                complete.trello_list_workspaces,
+                complete.trello_board_cards,
+                complete.trello_account_overview,
+                complete.trello_sync_status,
+                complete.trello_refresh,
+                complete.trello_set_archived_visibility,
+                complete.trello_get_settings,
+            ),
+            read_only=True,
+        )
 
     _register(
         mcp,
@@ -75,6 +96,7 @@ def register_tools(mcp, *, read_only: bool | None = None):
             list.get_lists,
             card.get_card,
             card.get_cards,
+            card.get_board_cards,
             card.search_cards,
             checklist.get_checklist,
             checklist.get_card_checklists,
