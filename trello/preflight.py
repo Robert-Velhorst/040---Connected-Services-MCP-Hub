@@ -59,13 +59,13 @@ def check_pythons() -> None:
     hint = (" (or just use install-docker.bat - no Python needed)"
             if docker_ready else "")
 
-    usable = [f for f in found if "3.12" in f or "3.13" in f]
+    usable = [f for f in found if "3.15" in f]
     if usable:
-        line(OK, f"Python 3.12/3.13 available ({len(usable)} match)",
+        line(OK, f"Python 3.15 available ({len(usable)} match)",
              usable[0][:90])
     elif found:
         line(missing, "Python is installed but not a usable version",
-             "Need 3.12 or 3.13. Found: "
+             "Need 3.15. Found: "
              + "; ".join(f.split()[0] for f in found[:4]) + hint)
     else:
         # py launcher missing - try bare python
@@ -74,11 +74,11 @@ def check_pythons() -> None:
             try:
                 v = subprocess.run([exe, "-c", "import sys;print('%d.%d'%sys.version_info[:2])"],
                                    capture_output=True, text=True, timeout=20).stdout.strip()
-                if v in ("3.12", "3.13"):
+                if v == "3.15":
                     line(OK, f"Python {v} on PATH", exe)
                 else:
                     line(missing, f"Python {v} is not supported",
-                         "Need 3.12 or 3.13" + hint)
+                         "Need 3.15" + hint)
             except Exception:
                 line(missing, "Python found but could not be run", exe + hint)
         else:

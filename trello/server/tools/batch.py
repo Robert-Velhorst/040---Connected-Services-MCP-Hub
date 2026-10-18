@@ -3,7 +3,7 @@ MCP tools for batch operations.
 """
 
 import json
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from server.trello import client
 from server.validators import ValidationService
 from server.services.batch import BatchService

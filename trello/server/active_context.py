@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 
 @dataclass

@@ -1,5 +1,7 @@
 # Trello MCP Server - Complete CRUD Edition
 
+> Historical snapshot. Current install and runtime guidance is maintained in [README.md](README.md).
+
 A powerful MCP server for interacting with Trello boards, lists, cards, and workspaces via AI Hosts. **Now with complete CRUD operations for all major resources including workspaces!**
 
 ## 🎉 What's New in Version 2.1

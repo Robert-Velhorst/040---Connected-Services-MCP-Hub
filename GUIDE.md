@@ -46,7 +46,7 @@ installer.
 A successful run looks like this:
 
 ```
- [1/5] Python found: py -3.13
+ [1/5] Python found: py -3.15
  [2/5] Creating the Python environment (this takes a minute)...
        Dependencies installed.
  [3/5] Connect Trello in your browser.
@@ -61,7 +61,7 @@ A successful run looks like this:
   Setup complete.
 ```
 
-> **If it says Python was not found**, install Python 3.13 from
+> **If it says Python was not found**, install Python 3.15 from
 > <https://www.python.org/downloads/release/python-3130/>. On the first screen
 > of that installer, tick **“Add python.exe to PATH”**. Then run `install.bat`
 > again.

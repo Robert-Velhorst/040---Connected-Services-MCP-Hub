@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from starlette.routing import Route
 
 from server import settings
@@ -33,6 +33,8 @@ logging.basicConfig(
 # Trello credentials are carried in query parameters. Keep HTTP client request
 # logs below INFO so those URLs cannot leak into normal server logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
+logging.getLogger("httpcore2").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Environment is loaded by server.settings, anchored to this file's directory
@@ -43,11 +45,7 @@ logger = logging.getLogger(__name__)
 # ChatGPT can make independent Streamable HTTP requests instead of preserving
 # an MCP session identifier.  Stateless mode keeps those requests compatible
 # while leaving the local stdio/Claude mode unchanged.
-mcp = FastMCP(
-    "Trello MCP Server",
-    stateless_http=True,
-    json_response=True,
-)
+mcp = MCPServer("Trello MCP Server")
 
 # Register tools
 register_tools(mcp)
@@ -107,16 +105,21 @@ def start_sse_server():
         host = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
         port = int(os.getenv("MCP_SERVER_PORT", "8000"))
 
-        # FastMCP's current Streamable HTTP endpoint is /mcp.  Earlier
+        # MCPServer's current Streamable HTTP endpoint is /mcp.  Earlier
         # versions of this project documented /sse, and ChatGPT keeps the
         # endpoint URL with a saved connector.  Serve the same Streamable
         # protocol on both paths so a legacy registration continues to work
         # without falling back to a misleading expired-connection prompt.
-        app = mcp.streamable_http_app()
+        app = mcp.streamable_http_app(
+            streamable_http_path="/mcp",
+            json_response=True,
+            stateless_http=True,
+            host=host,
+        )
         streamable_route = next(
             route
             for route in app.routes
-            if getattr(route, "path", None) == mcp.settings.streamable_http_path
+            if getattr(route, "path", None) == "/mcp"
         )
         app.router.routes.append(Route("/sse", endpoint=streamable_route.endpoint))
 

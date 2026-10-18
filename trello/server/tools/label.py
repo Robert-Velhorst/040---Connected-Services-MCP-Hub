@@ -5,7 +5,7 @@ This module contains tools for managing Trello labels.
 import logging
 from typing import List
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from server.models import TrelloLabel
 from server.dtos.update_label import UpdateLabelPayload

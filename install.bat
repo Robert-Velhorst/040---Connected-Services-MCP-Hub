@@ -14,12 +14,12 @@ echo  ==========================================================
 echo.
 
 REM ---------------------------------------------------------------- find python
-REM The lockfile's pinned pydantic-core does not build on 3.14, so prefer 3.13/3.12.
+REM Match the current main branch Python 3.15 runtime and lockfile.
 REM Executable and version flag are kept apart: "py -3.12" is two tokens, and
 REM quoting them as one path makes Windows look for a file called "py -3.12".
 set "PYEXE="
 set "PYARG="
-for %%V in (3.13 3.12) do (
+for %%V in (3.15) do (
     if not defined PYEXE (
         py -%%V -c "import sys" >nul 2>&1 && (
             set "PYEXE=py"
@@ -28,23 +28,23 @@ for %%V in (3.13 3.12) do (
     )
 )
 if not defined PYEXE (
-    python -c "import sys; assert (3,12) <= sys.version_info < (3,14)" >nul 2>&1 && set "PYEXE=python"
+    python -c "import sys; assert (3,15) <= sys.version_info < (3,16)" >nul 2>&1 && set "PYEXE=python"
 )
 
 if not defined PYEXE (
-    echo  [1/5] Python 3.12/3.13 not found - attempting automatic install...
+    echo  [1/5] Python 3.15 not found - attempting automatic install...
     where winget >nul 2>&1
     if errorlevel 1 goto :nopython
 
-    echo        Installing Python 3.13 via winget. This takes a few minutes.
+    echo        Installing Python 3.15 via winget. This takes a few minutes.
     echo.
-    winget install --id Python.Python.3.13 -e --source winget ^
+    winget install --id Python.Python.3.15 -e --source winget ^
         --accept-package-agreements --accept-source-agreements
     echo.
 
     REM winget updates PATH for NEW processes only, so re-probe via the
     REM launcher and the default per-user install location.
-    for %%V in (3.13 3.12) do (
+    for %%V in (3.15) do (
         if not defined PYEXE (
             py -%%V -c "import sys" >nul 2>&1 && (
                 set "PYEXE=py"
@@ -53,8 +53,8 @@ if not defined PYEXE (
         )
     )
     if not defined PYEXE (
-        if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" (
-            set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+        if exist "%LOCALAPPDATA%\Programs\Python\Python315\python.exe" (
+            set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python315\python.exe"
         )
     )
     if not defined PYEXE (
@@ -118,7 +118,7 @@ exit /b 0
 
 :nopython
 echo.
-echo  [X] Python 3.12 or 3.13 is needed and could not be installed automatically.
+echo  [X] Python 3.15 is needed and could not be installed automatically.
 echo.
 echo      Install it by hand from:
 echo         https://www.python.org/downloads/release/python-3130/

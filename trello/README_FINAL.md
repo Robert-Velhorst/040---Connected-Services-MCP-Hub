@@ -1,5 +1,7 @@
 # Trello MCP Server - Complete Edition
 
+> Historical snapshot. Current install and runtime guidance is maintained in [README.md](README.md).
+
 A comprehensive Model Context Protocol (MCP) server for Trello automation, providing **90+ operations** across all major Trello resources.
 
 ## 🚀 Features

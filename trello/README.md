@@ -38,12 +38,10 @@ local stdio servers directly.
 .\.venv\Scripts\python.exe setup_codex.py --remove   # unregister
 ```
 
-Use Python 3.12 or 3.13. The committed lockfile cannot install on 3.14 because
-of its pinned `pydantic-core`.
-
-> `mcp` must stay below 2.0. Version 2.0 removed `mcp.server.fastmcp`, which
-> every tool module imports; an unpinned install resolves to 2.x and the server
-> fails at import. `pyproject.toml` pins `mcp[cli]>=1.17.0,<2`.
+Use Python 3.15, matching the service runtime and committed lockfile. The
+connector uses the MCP 2.x `MCPServer` API. Native setup additionally needs
+`keyring` for Windows Credential Manager and `python-dotenv`; both are declared
+in `pyproject.toml` and locked.
 
 ---
 
@@ -147,3 +145,7 @@ prompts, logs, issues or pull requests. See [SECURITY.md](SECURITY.md).
 ```
 
 58 tests, no network access required — every Trello call is stubbed.
+
+## Current SDK and runtime
+
+The consolidated connector retains the current main branch MCP 2.x API (`MCPServer`) and Python 3.15 target. Install the locked environment with `uv sync --locked --python 3.15`; run validation with `uv run --locked --python 3.15 python -m pytest -q`. Earlier archive notes about pinning MCP below 2 apply to the pre-migration source only. Native browser consent stores tokens in Windows Credential Manager; the default Docker transport remains read-only stdio and its mirror should use a persistent volume.
