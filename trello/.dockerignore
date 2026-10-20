@@ -20,6 +20,5 @@ __pycache__/
 !README.md
 Dockerfile
 docker-compose.yml
-uv.lock
 test_*.py
 setup_codex.py
