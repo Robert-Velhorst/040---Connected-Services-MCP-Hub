@@ -120,7 +120,7 @@ def main():
                 "Wheel toolchain differs from the selected stable Rust release"
             )
     installed_os = subprocess.check_output(
-        ["dpkg-query", "-W", "-f=${Package}\t${Version}\n"],
+        ["apk", "list", "--installed"],
         text=True,
         encoding="utf-8",
         timeout=30,

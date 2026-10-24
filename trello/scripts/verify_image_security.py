@@ -16,11 +16,11 @@ def main():
         )
     os_info = scan["Metadata"]["OS"]
     if (
-        os_info["Family"] != "debian"
-        or os_info["Name"].split(".")[0] != "13"
+        os_info["Family"] != "alpine"
+        or ".".join(os_info["Name"].split(".")[:2]) != "3.24"
         or os_info.get("EOSL")
     ):
-        raise RuntimeError("Expected supported stable Debian 13")
+        raise RuntimeError("Expected supported stable Alpine 3.24")
     normalize = lambda name: re.sub(r"[-_.]+", "-", name.lower())
     installed = {}
     os_count = python_count = 0
@@ -51,9 +51,9 @@ def main():
             raise RuntimeError(
                 "Installed Python distribution is absent from scan: " + package["name"]
             )
-    if installed.get("libsqlite3-0") != {"3.54.1-0local1"} or installed.get(
-        "libssl4"
-    ) != {"4.1.0-0local1"}:
+    if installed.get("sqlite-libs") != {"3.54.1-r0"} or installed.get("libssl4") != {
+        "4.1.0-r0"
+    }:
         raise RuntimeError(
             "The scan must include the registered native source packages"
         )

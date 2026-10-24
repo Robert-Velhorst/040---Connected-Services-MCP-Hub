@@ -26,7 +26,12 @@
   },
   "rust": {
     "version": "1.99.1",
-    "image": "rust:1.99.1-slim-trixie@sha256:aab42391a986424e22d6a3ec14f37bc6dd3dacff4d457ca7cccd781e02297cc6",
+    "image": "rust:1.99.1-alpine3.24@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87",
     "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml"
+  },
+  "runtime_os": {
+    "family": "alpine",
+    "branch": "3.24",
+    "source": "https://www.alpinelinux.org/releases/"
   }
 }

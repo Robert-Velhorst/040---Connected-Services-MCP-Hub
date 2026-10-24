@@ -1,10 +1,8 @@
 # SDKs exist only in the disposable builder; credentials are supplied at runtime.
-FROM rust:1.99.1-slim-trixie@sha256:aab42391a986424e22d6a3ec14f37bc6dd3dacff4d457ca7cccd781e02297cc6 AS rust-sdk
+FROM rust:1.99.1-alpine3.24@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS rust-sdk
 
-FROM python:3.15.1-slim-trixie@sha256:08275f764e022331c6d3e3ca55d8cce01fa4684b02111adf0445d71806fe7941 AS native-sdk
-RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends build-essential dpkg-dev perl pkg-config libbluetooth-dev libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3 AS native-sdk
+RUN apk upgrade --no-cache && apk add --no-cache build-base linux-headers bluez-dev perl pkgconf libffi-dev openssl
 COPY --from=rust-sdk /usr/local/rustup /usr/local/rustup
 COPY --from=rust-sdk /usr/local/cargo /usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
@@ -25,14 +23,15 @@ RUN pip install --no-cache-dir --only-binary=:all: --require-hashes -r requireme
       --no-binary=cryptography --wheel-dir /wheelhouse -r requirements-image.lock \
     && python -I scripts/lock_built_wheels.py
 
-FROM python:3.15.1-slim-trixie@sha256:08275f764e022331c6d3e3ca55d8cce01fa4684b02111adf0445d71806fe7941
+FROM python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONIOENCODING=utf-8 \
     USE_CLAUDE_APP=true TRELLO_READ_ONLY=true TRELLO_MCP_DB_PATH=/data/trello_cache.db \
     VIRTUAL_ENV=/app/.venv PATH=/app/.venv/bin:$PATH HOME=/home/trello
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
-COPY --from=native-sdk /native-output/mcphub-openssl.deb /native-output/mcphub-sqlite.deb /tmp/
-RUN dpkg -i /tmp/mcphub-openssl.deb /tmp/mcphub-sqlite.deb && ldconfig \
-    && rm /tmp/mcphub-openssl.deb /tmp/mcphub-sqlite.deb
+RUN apk upgrade --no-cache
+COPY --from=native-sdk /native-output /tmp/mcphub-native
+RUN apk --keys-dir /tmp/mcphub-native/keys --no-network add \
+      /tmp/mcphub-native/mcphub-openssl.apk /tmp/mcphub-native/mcphub-sqlite.apk \
+    && rm -rf /tmp/mcphub-native
 COPY --from=native-sdk /python-tls-runtime/lib-dynload/ /usr/local/lib/python3.15/lib-dynload/
 COPY --from=native-sdk /python-tls-runtime/provenance.json /python-tls-runtime/CPython-LICENSE /usr/share/doc/mcphub-python-tls/
 WORKDIR /app/trello
@@ -48,7 +47,7 @@ RUN /usr/local/bin/python -m venv --without-pip /app/.venv \
     && /usr/local/bin/python -m pip uninstall --yes pip \
     && rm -rf /usr/local/lib/python3.15/ensurepip
 COPY . .
-RUN groupadd --gid 10001 trello && useradd --uid 10001 --gid 10001 --create-home trello \
+RUN addgroup -S -g 10001 trello && adduser -S -D -u 10001 -G trello trello \
     && mkdir -p /data && chown 10001:10001 /data
 USER 10001:10001
 CMD ["python", "main.py"]

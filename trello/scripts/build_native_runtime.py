@@ -84,19 +84,57 @@ def source_archive(component, directory):
 
 
 def package(name, version, source_name, directory, output, architecture):
-    control = directory / "DEBIAN"
-    control.mkdir()
-    control.joinpath("control").write_text(
-        f"Package: {name}\nVersion: {version}-0local1\nArchitecture: {architecture}\n"
-        f"Source: {source_name} ({version}-0local1)\nSection: libs\nPriority: optional\n"
-        + ("Multi-Arch: same\n" if name == "libsqlite3-0" else "")
-        + "Maintainer: MCP Hub runtime contributors\nDepends: libc6\n"
-        f"Description: Source-verified {source_name} runtime for MCP Hub\n",
-        encoding="utf-8",
-    )
-    run(
-        ["dpkg-deb", "--root-owner-group", "--build", str(directory), str(output)], ROOT
-    )
+    """Sign an inventory-bearing APK; never export its ephemeral private key."""
+    keys = output.parent / "keys"
+    keys.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="mcphub-apk-signing-") as temporary:
+        key = Path(temporary) / (name + ".rsa")
+        run(
+            [
+                "openssl",
+                "genpkey",
+                "-algorithm",
+                "RSA",
+                "-pkeyopt",
+                "rsa_keygen_bits:3072",
+                "-out",
+                str(key),
+            ],
+            ROOT,
+        )
+        key.chmod(0o600)
+        run(
+            [
+                "openssl",
+                "rsa",
+                "-in",
+                str(key),
+                "-pubout",
+                "-out",
+                str(keys / (name + ".rsa.pub")),
+            ],
+            ROOT,
+        )
+        command = ["apk", "--sign-key", str(key), "mkpkg", "--files", str(directory)]
+        fields = {
+            "name": name,
+            "version": version + "-r0",
+            "arch": architecture,
+            "origin": source_name,
+            "description": "MCP Hub checksum-verified upstream native runtime",
+            "license": "blessing" if name == "sqlite-libs" else "Apache-2.0",
+            "maintainer": "MCP Hub runtime contributors",
+            "depends": "musl",
+            "url": "https://www.sqlite.org/"
+            if name == "sqlite-libs"
+            else "https://www.openssl.org/",
+        }
+        if name == "sqlite-libs":
+            fields["provides"] = "so:libsqlite3.so.0=0"
+        for field, value in fields.items():
+            command.extend(["--info", field + ":" + value])
+        run([*command, "--output", str(output)], ROOT)
+        run(["apk", "--keys-dir", str(keys), "verify", str(output)], ROOT)
 
 
 def main():
@@ -113,16 +151,9 @@ def main():
         )
     output = Path("/native-output")
     output.mkdir()
-    architecture = subprocess.check_output(
-        ["dpkg", "--print-architecture"], text=True
-    ).strip()
-    multiarch = subprocess.check_output(
-        ["dpkg-architecture", "-qDEB_HOST_MULTIARCH"], text=True
-    ).strip()
-    if not all(
-        re.fullmatch(r"[a-z0-9_-]+", value) for value in [architecture, multiarch]
-    ):
-        raise RuntimeError("Unsupported Debian architecture")
+    architecture = subprocess.check_output(["apk", "--print-arch"], text=True).strip()
+    if not re.fullmatch(r"[a-z0-9_-]+", architecture):
+        raise RuntimeError("Unsupported Alpine architecture")
     with tempfile.TemporaryDirectory(prefix="mcphub-native-source-") as temporary:
         root = Path(temporary)
         ssl_dir = root / "openssl"
@@ -134,7 +165,7 @@ def main():
                 "shared",
                 "--prefix=" + str(PREFIX),
                 "--libdir=lib",
-                "--openssldir=/usr/lib/ssl",
+                "--openssldir=/etc/ssl",
                 "-Wl,-rpath," + str(PREFIX / "lib"),
             ],
             source,
@@ -171,14 +202,14 @@ def main():
             SPEC["openssl"]["version"],
             "openssl",
             ssl_package,
-            output / "mcphub-openssl.deb",
+            output / "mcphub-openssl.apk",
             architecture,
         )
 
         sqlite_dir = root / "sqlite"
         sqlite_dir.mkdir()
         sqlite = source_archive(SPEC["sqlite"], sqlite_dir)
-        library_dir = f"/usr/lib/{multiarch}"
+        library_dir = "/usr/lib"
         flags = [
             "-O2",
             "-fPIC",
@@ -228,7 +259,7 @@ def main():
             raise RuntimeError(
                 "Compiled SQLite version differs from the selected source"
             )
-        sqlite_doc = sqlite_package / "usr/share/doc/libsqlite3-0"
+        sqlite_doc = sqlite_package / "usr/share/doc/sqlite-libs"
         sqlite_doc.mkdir(parents=True)
         header = re.search(
             r"/\*.*?\*/", (sqlite / "sqlite3.c").read_text(encoding="utf-8"), re.DOTALL
@@ -246,11 +277,11 @@ def main():
             json.dumps(sqlite_provenance, indent=2) + "\n"
         )
         package(
-            "libsqlite3-0",
+            "sqlite-libs",
             SPEC["sqlite"]["version"],
-            "sqlite3",
+            "sqlite",
             sqlite_package,
-            output / "mcphub-sqlite.deb",
+            output / "mcphub-sqlite.apk",
             architecture,
         )
         output.joinpath("build-provenance.json").write_text(

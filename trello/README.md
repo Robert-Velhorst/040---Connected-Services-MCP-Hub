@@ -155,9 +155,9 @@ The consolidated connector retains the current main branch MCP 2.x API (`MCPServ
 The frozen lock refreshes certifi 2026.10.23, httpcore2/httpx2 2.16.0,
 Starlette 1.9.0, pluggy 1.7.0 and pycparser 3.12 from current public stable
 metadata. Python stays at the security release 3.15.1 and uv at 0.13.5.
-The image moves from Debian Bookworm to current stable Trixie, with the
-official Python image digest pinned and current distribution updates applied
-in its disposable build. No operator installation or persistent database is
+The earlier #88 image moved from Debian Bookworm to Trixie. The native
+candidate below now uses pinned official Alpine 3.24 images and current
+distribution updates in its disposable build. No operator installation or persistent database is
 modified by preparing these sources.
 
 CI retains the existing source checks, adds an unsuppressed full dependency
@@ -175,7 +175,10 @@ This separate candidate follows #88 at d7a0d75751906193668cbb1a97b2dde80ad532a9.
 The disposable SDK builds checksum-verified upstream SQLite 3.54.1 and OpenSSL
 4.1.0, rebuilds exact CPython 3.15.1 SSL/hash modules, and compiles cryptography
 50.0.2 against the same TLS libraries using Rust 1.99.1. Native libraries are
-registered in Debian packages with upstream provenance/license information.
+registered in signed Alpine packages with upstream provenance/license
+information. Ephemeral signing private keys stay in the disposable SDK and
+are removed in the same build step; final installation verifies packages
+using only their public keys, with no global trust-store changes.
 All runtime wheels are installed offline from generated SHA-256 locks; build
 tools, pip and ensurepip are excluded from the final runtime.
 
@@ -205,3 +208,18 @@ The previous #88 evidence does not qualify this native candidate. Real Trello,
 Freshdesk, operator mirror recovery and Hetzner deployment remain unverified;
 compatibility system libraries and Rust crate currency are not declared fully
 current merely because the selected application libraries build.
+
+### Image operating-system correction
+
+At e3c9d8c, native inspection and all 65 existing image cases passed, but the
+complete unsuppressed Trivy report identified 164 Debian package findings
+(44 high, 58 medium, 61 low, one unknown); none recorded a fixed version.
+The 46 installed Python packages had no reported findings. This candidate
+changes the actual runtime to supported stable Alpine 3.24 rather than
+ignoring Debian findings or stripping inventory. The same pinned application
+libraries are rebuilt for musl, with signed package metadata and full OS and
+Python inventories retained. Native inspection, unchanged cases and the full
+raw scan must qualify the new image before it can be considered ready.
+The libc and base-system change requires this fresh compatibility evidence;
+previous Debian results do not qualify the Alpine image. This draft changes
+no host installation, mirror, credentials or running deployment.
