@@ -78,6 +78,7 @@ jobs:
           docker image save trello-mcp:ci -o .qualification/input/image.tar
           python scripts/archive_image_identity.py .qualification/input/image.tar image-inspect.json trello-mcp:ci image-identity.json .qualification/input/config-id.txt
           docker run --rm --read-only --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=2g,uid="$(id -u)",gid="$(id -g)",mode=0700 \
             --mount type=bind,src="$PWD/.qualification/input",dst=/input,readonly \
             --mount type=bind,src="$PWD/.qualification/cache",dst=/cache \
             --mount type=bind,src="$PWD/.qualification/reports",dst=/reports \
