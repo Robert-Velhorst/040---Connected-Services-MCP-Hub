@@ -49,6 +49,42 @@ jobs:
           docker image inspect trello-mcp:ci > image-inspect.json
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
             --entrypoint /app/.venv/bin/python trello-mcp:ci scripts/installed_runtime.py > installed-runtime.json
+      - name: Run the existing source cases inside the unchanged runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qualification/tests .qualification/test-tools
+          cp test_*.py .qualification/tests/
+          uv export --locked --only-group dev --no-emit-project --format requirements-txt --output-file .qualification/test-tools.lock
+          uv pip install --target .qualification/test-tools --require-hashes --only-binary=:all: --no-deps -r .qualification/test-tools.lock
+          if find .qualification/test-tools -name '*.so' -print -quit | grep -q .; then
+            echo 'Qualification tools must remain pure Python' >&2
+            exit 1
+          fi
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0700 \
+            --mount type=bind,src="$PWD/.qualification/tests",dst=/qualification-tests,readonly \
+            --mount type=bind,src="$PWD/.qualification/test-tools",dst=/qualification-tools,readonly \
+            -e PYTHONPATH=/qualification-tools:/app -e HOME=/tmp \
+            -e TRELLO_API_KEY=synthetic-ci-key -e TRELLO_TOKEN=synthetic-ci-token \
+            -e TRELLO_MCP_DB_PATH=/tmp/trello-ci-mirror.db -e TRELLO_MCP_SETTINGS_FILE=/tmp/trello-ci-settings.json \
+            --entrypoint /app/.venv/bin/python trello-mcp:ci -m pytest -q \
+            -o cache_dir=/tmp/pytest-cache /qualification-tests 2>&1 | tee image-source-tests.log
+      - name: Save exact image identity and scan the full raw package inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qualification/input .qualification/cache .qualification/reports
+          docker image save trello-mcp:ci -o .qualification/input/image.tar
+          python scripts/archive_image_identity.py .qualification/input/image.tar image-inspect.json trello-mcp:ci image-identity.json .qualification/input/config-id.txt
+          docker run --rm --read-only --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+            --mount type=bind,src="$PWD/.qualification/input",dst=/input,readonly \
+            --mount type=bind,src="$PWD/.qualification/cache",dst=/cache \
+            --mount type=bind,src="$PWD/.qualification/reports",dst=/reports \
+            aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+            image --input /input/image.tar --cache-dir /cache --scanners vuln --list-all-pkgs \
+            --ignorefile /dev/null --exit-code 1 --format json --output /reports/image-security.json
+          python scripts/verify_image_security.py .qualification/reports/image-security.json image-identity.json installed-runtime.json > verified-image.json
       - name: Retain dependency and installed-runtime evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -59,5 +95,9 @@ jobs:
             trello/python-audit.json
             trello/image-inspect.json
             trello/installed-runtime.json
+            trello/image-source-tests.log
+            trello/image-identity.json
+            trello/verified-image.json
+            trello/.qualification/reports/image-security.json
           retention-days: 7
           if-no-files-found: warn
