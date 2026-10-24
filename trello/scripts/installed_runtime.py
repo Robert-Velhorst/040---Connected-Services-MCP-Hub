@@ -32,7 +32,9 @@ def main():
             "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
         }
     profile = json.loads(
-        Path("/app/native-client-runtime.json").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "native-client-runtime.json").read_text(
+            encoding="utf-8"
+        )
     )
     if os.getuid() != 10001 or sqlite3.sqlite_version != profile["sqlite"]["version"]:
         raise RuntimeError("Expected the selected SQLite library and unprivileged user")

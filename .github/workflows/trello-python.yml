@@ -65,7 +65,7 @@ jobs:
             --tmpfs /tmp:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0700 \
             --mount type=bind,src="$PWD/.qualification/tests",dst=/qualification-tests,readonly \
             --mount type=bind,src="$PWD/.qualification/test-tools",dst=/qualification-tools,readonly \
-            -e PYTHONPATH=/qualification-tools:/app -e HOME=/tmp \
+            -e PYTHONPATH=/qualification-tools:/app/trello -e HOME=/tmp \
             -e TRELLO_API_KEY=synthetic-ci-key -e TRELLO_TOKEN=synthetic-ci-token \
             -e TRELLO_MCP_DB_PATH=/tmp/trello-ci-mirror.db -e TRELLO_MCP_SETTINGS_FILE=/tmp/trello-ci-settings.json \
             --entrypoint /app/.venv/bin/python trello-mcp:ci -m pytest -q \

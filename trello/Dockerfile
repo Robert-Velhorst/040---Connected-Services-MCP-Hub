@@ -35,7 +35,7 @@ RUN dpkg -i /tmp/mcphub-openssl.deb /tmp/mcphub-sqlite.deb && ldconfig \
     && rm /tmp/mcphub-openssl.deb /tmp/mcphub-sqlite.deb
 COPY --from=native-sdk /python-tls-runtime/lib-dynload/ /usr/local/lib/python3.15/lib-dynload/
 COPY --from=native-sdk /python-tls-runtime/provenance.json /python-tls-runtime/CPython-LICENSE /usr/share/doc/mcphub-python-tls/
-WORKDIR /app
+WORKDIR /app/trello
 COPY --from=dependencies /wheelhouse /tmp/mcphub-wheelhouse
 RUN /usr/local/bin/python -m venv --without-pip /app/.venv \
     && /usr/local/bin/python -m pip --python /app/.venv/bin/python install --no-cache-dir --no-index \
