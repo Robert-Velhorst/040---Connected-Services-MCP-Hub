@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -12,12 +13,11 @@ import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-LOG_FILE = "freshdesk_mcp.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()],
-)
+# Stderr is captured by the operator's process manager; file logging is explicit.
+_handlers = [logging.StreamHandler()]
+if _log_file := os.getenv("FRESHDESK_LOG_FILE"):
+    _handlers.append(logging.FileHandler(_log_file, encoding="utf-8"))
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", handlers=_handlers)
 logger = logging.getLogger("FreshdeskMCP")
 
 
@@ -52,7 +52,7 @@ def _positive_int_env(name: str, default: int) -> int:
         return default
 
 
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"), override=False)
 FRESHDESK_DOMAIN = normalize_domain(os.getenv("FRESHDESK_DOMAIN", ""))
 FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY")
 FRESHDESK_SEARCH_MAX_PAGES = _positive_int_env("FRESHDESK_SEARCH_MAX_PAGES", 10)
@@ -105,7 +105,7 @@ def safe_request(method: str, endpoint: str, **kwargs) -> Any:
             logger.warning("Freshdesk request failed with HTTP %s", status_code)
             return _error_response("Freshdesk request failed", status_code)
         except requests.exceptions.RequestException as error:
-            logger.warning("Attempt %s/%s failed: %s", attempt + 1, retries, error)
+            logger.warning("Attempt %s/%s failed (%s)", attempt + 1, retries, type(error).__name__)
             if attempt < retries - 1:
                 time.sleep(2)
     return _error_response(f"Max retries reached for {endpoint}")
@@ -130,9 +130,7 @@ async def list_tickets_for_search() -> list[dict[str, Any]] | dict[str, Any]:
     """Page through tickets when the Freshdesk search API is unavailable."""
     tickets: list[dict[str, Any]] = []
     for page in range(1, FRESHDESK_SEARCH_MAX_PAGES + 1):
-        batch = await fd_get(
-            "tickets", params={"page": page, "per_page": FRESHDESK_TICKETS_PER_PAGE}
-        )
+        batch = await fd_get("tickets", params={"page": page, "per_page": FRESHDESK_TICKETS_PER_PAGE})
         if isinstance(batch, dict) and "error" in batch:
             return batch
         if not isinstance(batch, list):
@@ -224,9 +222,7 @@ async def fetch(ticket_id: int) -> dict[str, Any]:
 
 
 @server.tool(description="Create a new Freshdesk ticket")
-async def create_ticket(
-    email: str, subject: str, description: str, priority: int = 1, status: int = 2
-) -> Any:
+async def create_ticket(email: str, subject: str, description: str, priority: int = 1, status: int = 2) -> Any:
     return await fd_post(
         "tickets",
         {"email": email, "subject": subject, "description": description, "priority": priority, "status": status},
@@ -268,5 +264,6 @@ async def ping() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    print("Starting Freshdesk MCP Connector on http://localhost:8001")
-    server.run(transport="sse", host="0.0.0.0", port=8001)
+    host = os.getenv("FRESHDESK_MCP_HOST", "127.0.0.1")
+    logger.info("Starting Freshdesk MCP connector on %s:8001", host)
+    server.run(transport="sse", host=host, port=8001)
