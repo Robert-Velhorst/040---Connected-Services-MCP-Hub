@@ -1,0 +1,63 @@
+name: Freshdesk Python quality
+on:
+  pull_request:
+    paths: ["freshdesk/**", ".github/workflows/freshdesk-python.yml"]
+  push:
+    branches: [main]
+    paths: ["freshdesk/**", ".github/workflows/freshdesk-python.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freshdesk-python:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: freshdesk
+    env:
+      PYTHONUTF8: "1"
+      PYYAML_FORCE_CYTHON: "1"
+      PYYAML_FORCE_LIBYAML: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15.1"
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.5"
+          enable-cache: true
+          cache-dependency-glob: "freshdesk/uv.lock"
+      - name: Prepare native SDK only on the disposable runner
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libyaml-dev
+      - name: Seed the exact source-build toolchain
+        run: |
+          uv venv --python 3.15.1
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r requirements-build.lock
+      - name: Install the frozen graph with the selected PyYAML toolchain
+        run: uv sync --frozen --all-groups --no-build-isolation-package pyyaml --python 3.15.1
+      - name: Check source and execute the existing mocked cases
+        run: |
+          uv run --frozen --all-groups ruff check main.py
+          uv run --frozen --all-groups python -m compileall -q main.py test_main.py
+          uv run --frozen --all-groups python -m pytest -q test_main.py --junitxml=source-results.xml
+      - name: Inspect the actual Python and native YAML runtime
+        run: |
+          uv run --frozen --all-groups python -c 'import json,sys,yaml; assert sys.version_info[:3] == (3,15,1); assert yaml.__with_libyaml__; print(json.dumps({"python":sys.version,"pyyaml":yaml.__version__,"libyaml":yaml._yaml.get_version_string(),"provider_acceptance":False}))' > native-runtime.json
+      - name: Audit the complete frozen dependency graph without exclusions
+        run: |
+          uv export --frozen --all-groups --no-emit-project --format requirements-txt --output-file requirements-audit.lock
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit -r requirements-audit.lock --no-deps --disable-pip --strict -f json -o python-audit.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: freshdesk-stable-evidence
+          path: |
+            freshdesk/source-results.xml
+            freshdesk/native-runtime.json
+            freshdesk/requirements-audit.lock
+            freshdesk/python-audit.json
+          retention-days: 7
+          if-no-files-found: warn
