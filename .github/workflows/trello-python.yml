@@ -23,7 +23,7 @@ jobs:
         working-directory: trello
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.15.1"
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -35,5 +35,29 @@ jobs:
       - run: uv run --locked --all-groups --python 3.15.1 pytest -q
       - run: uv run --locked --all-groups --python 3.15.1 python -m compileall -q .
 
+      - name: Audit the frozen full Python graph without advisory exclusions
+        run: |
+          uv export --locked --all-groups --no-emit-project --format requirements-txt --output-file requirements-audit.lock
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit -r requirements-audit.lock --no-deps --disable-pip --strict -f json -o python-audit.json
       - name: Build the Python 3.15 service container
         run: docker build --tag trello-mcp:ci .
+
+      - name: Inspect actual image libraries without starting the connector
+        shell: bash
+        run: |
+          docker image inspect trello-mcp:ci > image-inspect.json
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --entrypoint /app/.venv/bin/python trello-mcp:ci scripts/installed_runtime.py > installed-runtime.json
+      - name: Retain dependency and installed-runtime evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trello-stable-runtime-evidence
+          path: |
+            trello/requirements-audit.lock
+            trello/python-audit.json
+            trello/image-inspect.json
+            trello/installed-runtime.json
+          retention-days: 7
+          if-no-files-found: warn

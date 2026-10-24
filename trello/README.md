@@ -149,3 +149,22 @@ prompts, logs, issues or pull requests. See [SECURITY.md](SECURITY.md).
 ## Current SDK and runtime
 
 The consolidated connector retains the current main branch MCP 2.x API (`MCPServer`) and Python 3.15 target. Install the locked environment with `uv sync --locked --python 3.15`; run validation with `uv run --locked --python 3.15 python -m pytest -q`. Earlier archive notes about pinning MCP below 2 apply to the pre-migration source only. Native browser consent stores tokens in Windows Credential Manager; the default Docker transport remains read-only stdio and its mirror should use a persistent volume.
+
+## Stable dependency and image follow-up (24 October 2026)
+
+The frozen lock refreshes certifi 2026.10.23, httpcore2/httpx2 2.16.0,
+Starlette 1.9.0, pluggy 1.7.0 and pycparser 3.12 from current public stable
+metadata. Python stays at the security release 3.15.1 and uv at 0.13.5.
+The image moves from Debian Bookworm to current stable Trixie, with the
+official Python image digest pinned and current distribution updates applied
+in its disposable build. No operator installation or persistent database is
+modified by preparing these sources.
+
+CI retains the existing source checks, adds an unsuppressed full dependency
+audit, builds the image and records its actual Python, SQLite, TLS, CA roots,
+installed packages and native module hashes. The inspector does not start the
+connector, read credentials, open its mirror or call Trello. Version metadata
+is not full native-component currency or a complete image vulnerability scan.
+Existing boolean-returning test warnings limit the source suite's assurance;
+no tests are removed or relaxed. Freshdesk installed/runtime acceptance, actual
+Trello credentials, mirror recovery and Hetzner deployment remain separate.
