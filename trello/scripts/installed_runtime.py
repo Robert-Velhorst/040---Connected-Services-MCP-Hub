@@ -1,5 +1,6 @@
 """Inspect installed code without starting the connector or opening its mirror."""
 
+import ctypes
 import hashlib
 import importlib.metadata
 import json
@@ -58,13 +59,17 @@ def main():
         if hashlib.sha256(file.read_bytes()).hexdigest() != info["sha256"]:
             raise RuntimeError("CPython TLS module hash mismatch")
     native = json.loads(
-        Path("/usr/share/doc/libssl4/source-provenance.json").read_text(
-            encoding="utf-8"
-        )
+        Path("/usr/share/mcphub-native/openssl.json").read_text(encoding="utf-8")
     )
     for name, digest in native["libraries"].items():
         if hashlib.sha256(Path(name).read_bytes()).hexdigest() != digest:
             raise RuntimeError("Native TLS library hash mismatch")
+    crypto = ctypes.CDLL(str(Path(profile["prefix"]) / "lib/libcrypto.so.4"))
+    crypto.OSSL_PROVIDER_load.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    crypto.OSSL_PROVIDER_load.restype = ctypes.c_void_p
+    legacy_provider = crypto.OSSL_PROVIDER_load(None, b"legacy")
+    if not legacy_provider:
+        raise RuntimeError("The built OpenSSL legacy provider must remain loadable")
     loaded = {
         line.split()[-1]
         for line in Path("/proc/self/maps").read_text(encoding="utf-8").splitlines()
@@ -77,9 +82,7 @@ def main():
         ):
             raise RuntimeError("Loaded TLS library is outside the selected prefix")
     sqlite_provenance = json.loads(
-        Path("/usr/share/doc/libsqlite3-0/source-provenance.json").read_text(
-            encoding="utf-8"
-        )
+        Path("/usr/share/mcphub-native/sqlite.json").read_text(encoding="utf-8")
     )
     sqlite_paths = {
         name for name in loaded if Path(name).name.startswith("libsqlite3.so")
@@ -128,6 +131,7 @@ def main():
                 "python_ssl": ssl.OPENSSL_VERSION,
                 "ca_roots": ca_roots,
                 "cryptography_ssl": cryptography_ssl,
+                "legacy_provider_loadable": True,
                 "python_tls_provenance": tls,
                 "native_tls_provenance": native,
                 "sqlite_provenance": sqlite_provenance,

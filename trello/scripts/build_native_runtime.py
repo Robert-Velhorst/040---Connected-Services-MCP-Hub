@@ -151,12 +151,20 @@ def main():
                 raise RuntimeError("Expected actual OpenSSL runtime libraries")
             shutil.copyfile(file, lib_dir / name)
             libraries[str(file)] = hashlib.sha256(file.read_bytes()).hexdigest()
+        provider = PREFIX / "lib/ossl-modules/legacy.so"
+        if not provider.is_file() or provider.is_symlink():
+            raise RuntimeError("Expected the current OpenSSL legacy provider module")
+        (lib_dir / "ossl-modules").mkdir()
+        shutil.copyfile(provider, lib_dir / "ossl-modules/legacy.so")
+        libraries[str(provider)] = hashlib.sha256(provider.read_bytes()).hexdigest()
         doc = ssl_package / "usr/share/doc/libssl4"
         doc.mkdir(parents=True)
         shutil.copyfile(source / "LICENSE.txt", doc / "copyright")
         provenance = {"source": SPEC["openssl"], "libraries": libraries}
-        doc.joinpath("source-provenance.json").write_text(
-            json.dumps(provenance, indent=2) + "\n"
+        metadata = ssl_package / "usr/share/mcphub-native"
+        metadata.mkdir(parents=True)
+        metadata.joinpath("openssl.json").write_text(
+            json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
         )
         package(
             "libssl4",
@@ -228,12 +236,13 @@ def main():
         sqlite_doc.joinpath("copyright").write_text(
             header + "\nhttps://www.sqlite.org/copyright.html\n"
         )
+        (sqlite_package / "usr/share/mcphub-native").mkdir(parents=True)
         sqlite_provenance = {
             "source": SPEC["sqlite"],
             "cflags": flags,
             "library_sha256": hashlib.sha256(actual.read_bytes()).hexdigest(),
         }
-        sqlite_doc.joinpath("source-provenance.json").write_text(
+        (sqlite_package / "usr/share/mcphub-native/sqlite.json").write_text(
             json.dumps(sqlite_provenance, indent=2) + "\n"
         )
         package(
