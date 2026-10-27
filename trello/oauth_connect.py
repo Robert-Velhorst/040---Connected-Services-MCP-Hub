@@ -63,6 +63,19 @@ def save_settings(app_key: str) -> None:
     os.replace(temporary, path)
 
 
+def matches_pending_state(candidate: object, expected: str | None) -> bool:
+    # compare_digest rejects non-ASCII strings; malformed input must receive a
+    # normal rejection rather than tearing down the consent HTTP connection.
+    return (
+        isinstance(candidate, str)
+        and candidate.isascii()
+        and isinstance(expected, str)
+        and bool(expected)
+        and expected.isascii()
+        and secrets.compare_digest(candidate, expected)
+    )
+
+
 class ConnectHandler(BaseHTTPRequestHandler):
     server: "ConnectServer"
 
@@ -112,7 +125,12 @@ class ConnectHandler(BaseHTTPRequestHandler):
 <form method=\"post\" action=\"/setup\"><label>Power-Up API key <input name=\"app_key\" required autocomplete=\"off\"></label><button>Continue to Trello</button></form>""")
             return
         if route.path == "/callback":
-            state = parse_qs(route.query).get("state", [""])[0]
+            supplied_state = parse_qs(route.query).get("state", [""])[0]
+            if not matches_pending_state(supplied_state, self.server.state):
+                self._response("Authorization state did not match.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+                return
+            # Render only the server-generated nonce, never callback query text.
+            state = self.server.state
             self._response(f"""<!doctype html><title>Connecting Trello</title><p id=\"status\">Finishing connection...</p>
 <script>
 const token = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -146,7 +164,7 @@ else {{ fetch("/complete", {{method:"POST",headers:{{"Content-Type":"application
                 return
             token = payload.get("token") if isinstance(payload, dict) else None
             state = payload.get("state") if isinstance(payload, dict) else None
-            if not isinstance(token, str) or not isinstance(state, str) or not self.server.state or not secrets.compare_digest(state, self.server.state):
+            if not isinstance(token, str) or not matches_pending_state(state, self.server.state):
                 self._response(json.dumps({"error": "Authorization state did not match."}), HTTPStatus.BAD_REQUEST, "application/json")
                 return
             app_key = load_settings().get("trello_app_key")
