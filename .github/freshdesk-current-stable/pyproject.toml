@@ -5,6 +5,8 @@ description = "Freshdesk MCP connector with bounded HTTP helpers"
 requires-python = ">=3.15"
 dependencies = [
     "fastmcp==4.1.4",
+    # Preserve the keyring backend previously enabled by FastMCP's default extras.
+    "py-key-value-aio[keyring]>=0.4.4,<0.5.0",
     "requests==2.34.2",
     "python-dotenv==1.2.4",
     "colorama==0.4.6",

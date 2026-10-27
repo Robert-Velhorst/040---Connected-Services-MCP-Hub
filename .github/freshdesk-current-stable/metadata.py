@@ -16,6 +16,7 @@ TARGETS = {
     "cyclopts": "5.3.1",
     "fastmcp": "4.1.4",
     "fastmcp-slim": "4.1.4",
+    "keyring": "25.7.0",
     "ruff": "0.17.3",
     "sse-starlette": "3.6.0",
     "starlette": "1.10.0",
@@ -70,6 +71,9 @@ def main():
         return
 
     if args.phase == "installed":
+        # Import only: do not construct a store or read/write any credential.
+        from key_value.aio.stores.keyring import KeyringStore
+
         versions = {
             re.sub(r"[-_.]+", "-", dist.metadata["Name"]).lower(): dist.version
             for dist in importlib.metadata.distributions()
@@ -80,6 +84,8 @@ def main():
                    for value in versions.values()), "Non-release version selected"
         (reports / "actual-installed-package-versions.json").write_text(
             json.dumps({"versions": versions, "required_targets": TARGETS,
+                        "retained_keyring_backend_import": KeyringStore.__module__ + "." + KeyringStore.__name__,
+                        "credential_store_constructed_or_accessed": False,
                         "full_native_SDK_image_provider_and_data_acceptance": False}, indent=2) + "\n"
         )
         return

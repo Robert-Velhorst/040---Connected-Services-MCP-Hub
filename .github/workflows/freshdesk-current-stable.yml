@@ -67,7 +67,7 @@ jobs:
           uv export --frozen --all-groups --no-emit-project --format requirements-txt --output-file requirements-audit.lock
           python -m pip install pip-audit==2.10.1
           python -m pip_audit -r requirements-audit.lock --no-deps --disable-pip --strict -f json -o python-audit.json
-      - name: Verify all seven current installed identities and release-only selections
+      - name: Verify seven upgrades, retained keyring and release-only selections
         run: uv run --frozen --all-groups python ../.github/freshdesk-current-stable/metadata.py --phase installed --reports "$REPORTS"
       - name: Preserve generated inputs and verify all original source after execution
         if: always()
