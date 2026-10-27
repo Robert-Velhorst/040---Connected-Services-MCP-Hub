@@ -33,7 +33,9 @@ jobs:
           cache-dependency-glob: "freshdesk/uv.lock"
       - name: Initialize the fixed sibling report location
         shell: bash
-        run: printf 'REPORTS=%s/../freshdesk-current-stable-evidence\n' "$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+        run: |
+          reports_parent="$(dirname "$GITHUB_WORKSPACE")"
+          printf 'REPORTS=%s/freshdesk-current-stable-evidence\n' "$reports_parent" >> "$GITHUB_ENV"
       - name: Bind original source and prepare the declared manifest
         run: python ../.github/freshdesk-current-stable/metadata.py --phase prepare
       - name: Resolve and export the complete current stable graph normally
@@ -76,6 +78,6 @@ jobs:
         if: always()
         with:
           name: freshdesk-current-stable-evidence
-          path: ${{ github.workspace }}/../freshdesk-current-stable-evidence/
+          path: ${{ env.REPORTS }}/
           retention-days: 7
           if-no-files-found: error
