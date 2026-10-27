@@ -4,7 +4,9 @@
 import asyncio
 import logging
 import os
+import re
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -12,33 +14,38 @@ import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-LOG_FILE = "freshdesk_mcp.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()],
-)
+# Stderr is captured by the operator's process manager; file logging is explicit.
+_handlers = [logging.StreamHandler()]
+if _log_file := os.getenv("FRESHDESK_LOG_FILE"):
+    _handlers.append(logging.FileHandler(_log_file, encoding="utf-8"))
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", handlers=_handlers)
 logger = logging.getLogger("FreshdeskMCP")
 
 
 def normalize_domain(value: str) -> str:
-    """Return a hostname-only Freshdesk domain or reject ambiguous URLs."""
+    """Accept only an HTTPS Freshdesk tenant authority, never an arbitrary host."""
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ValueError("FRESHDESK_DOMAIN must not contain control characters")
     raw = value.strip()
     if not raw:
         return ""
 
     parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
     if (
-        parsed.scheme not in {"http", "https"}
+        parsed.scheme != "https"
         or not parsed.hostname
-        or parsed.username
-        or parsed.password
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.netloc.lower() != parsed.hostname
         or parsed.path not in {"", "/"}
         or parsed.query
         or parsed.fragment
     ):
         raise ValueError("FRESHDESK_DOMAIN must contain only a hostname")
-    return parsed.hostname.rstrip(".").lower()
+    hostname = parsed.hostname.removesuffix(".").lower()
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.freshdesk\.com", hostname):
+        raise ValueError("FRESHDESK_DOMAIN must be a tenant.freshdesk.com hostname")
+    return hostname
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -52,7 +59,7 @@ def _positive_int_env(name: str, default: int) -> int:
         return default
 
 
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"), override=False)
 FRESHDESK_DOMAIN = normalize_domain(os.getenv("FRESHDESK_DOMAIN", ""))
 FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY")
 FRESHDESK_SEARCH_MAX_PAGES = _positive_int_env("FRESHDESK_SEARCH_MAX_PAGES", 10)
@@ -61,7 +68,8 @@ FRESHDESK_TICKETS_PER_PAGE = 100
 if not FRESHDESK_DOMAIN or not FRESHDESK_API_KEY:
     raise ValueError("Missing FRESHDESK_DOMAIN or FRESHDESK_API_KEY in environment variables")
 
-BASE_URL = f"https://{FRESHDESK_DOMAIN}/api/v2"
+FRESHDESK_TENANT = FRESHDESK_DOMAIN.removesuffix(".freshdesk.com")
+BASE_URL = f"https://{FRESHDESK_TENANT}.freshdesk.com/api/v2"
 
 
 def _error_response(message: str, status_code: int | None = None) -> dict[str, Any]:
@@ -80,6 +88,10 @@ def _retry_after_seconds(response: requests.Response) -> int:
 
 def safe_request(method: str, endpoint: str, **kwargs) -> Any:
     """Perform one Freshdesk request with bounded retry for rate limits and I/O."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*", endpoint):
+        return _error_response("Freshdesk endpoint must be a relative API resource path")
+    # Callers cannot re-enable redirects or send the account credential elsewhere.
+    kwargs["allow_redirects"] = False
     retries = 3
     for attempt in range(retries):
         try:
@@ -90,6 +102,8 @@ def safe_request(method: str, endpoint: str, **kwargs) -> Any:
                 timeout=20,
                 **kwargs,
             )
+            if 300 <= response.status_code < 400:
+                return _error_response("Freshdesk redirects are not permitted", response.status_code)
             if response.status_code == 429 and attempt < retries - 1:
                 time.sleep(_retry_after_seconds(response))
                 continue
@@ -105,7 +119,7 @@ def safe_request(method: str, endpoint: str, **kwargs) -> Any:
             logger.warning("Freshdesk request failed with HTTP %s", status_code)
             return _error_response("Freshdesk request failed", status_code)
         except requests.exceptions.RequestException as error:
-            logger.warning("Attempt %s/%s failed: %s", attempt + 1, retries, error)
+            logger.warning("Attempt %s/%s failed (%s)", attempt + 1, retries, type(error).__name__)
             if attempt < retries - 1:
                 time.sleep(2)
     return _error_response(f"Max retries reached for {endpoint}")
@@ -130,9 +144,7 @@ async def list_tickets_for_search() -> list[dict[str, Any]] | dict[str, Any]:
     """Page through tickets when the Freshdesk search API is unavailable."""
     tickets: list[dict[str, Any]] = []
     for page in range(1, FRESHDESK_SEARCH_MAX_PAGES + 1):
-        batch = await fd_get(
-            "tickets", params={"page": page, "per_page": FRESHDESK_TICKETS_PER_PAGE}
-        )
+        batch = await fd_get("tickets", params={"page": page, "per_page": FRESHDESK_TICKETS_PER_PAGE})
         if isinstance(batch, dict) and "error" in batch:
             return batch
         if not isinstance(batch, list):
@@ -224,9 +236,7 @@ async def fetch(ticket_id: int) -> dict[str, Any]:
 
 
 @server.tool(description="Create a new Freshdesk ticket")
-async def create_ticket(
-    email: str, subject: str, description: str, priority: int = 1, status: int = 2
-) -> Any:
+async def create_ticket(email: str, subject: str, description: str, priority: int = 1, status: int = 2) -> Any:
     return await fd_post(
         "tickets",
         {"email": email, "subject": subject, "description": description, "priority": priority, "status": status},
@@ -268,5 +278,6 @@ async def ping() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    print("Starting Freshdesk MCP Connector on http://localhost:8001")
-    server.run(transport="sse", host="0.0.0.0", port=8001)
+    host = os.getenv("FRESHDESK_MCP_HOST", "127.0.0.1")
+    logger.info("Starting Freshdesk MCP connector on %s:8001", host)
+    server.run(transport="sse", host=host, port=8001)
