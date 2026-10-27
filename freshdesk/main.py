@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -22,23 +23,29 @@ logger = logging.getLogger("FreshdeskMCP")
 
 
 def normalize_domain(value: str) -> str:
-    """Return a hostname-only Freshdesk domain or reject ambiguous URLs."""
+    """Accept only an HTTPS Freshdesk tenant authority, never an arbitrary host."""
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ValueError("FRESHDESK_DOMAIN must not contain control characters")
     raw = value.strip()
     if not raw:
         return ""
 
     parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
     if (
-        parsed.scheme not in {"http", "https"}
+        parsed.scheme != "https"
         or not parsed.hostname
-        or parsed.username
-        or parsed.password
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.netloc.lower() != parsed.hostname
         or parsed.path not in {"", "/"}
         or parsed.query
         or parsed.fragment
     ):
         raise ValueError("FRESHDESK_DOMAIN must contain only a hostname")
-    return parsed.hostname.rstrip(".").lower()
+    hostname = parsed.hostname.removesuffix(".").lower()
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.freshdesk\.com", hostname):
+        raise ValueError("FRESHDESK_DOMAIN must be a tenant.freshdesk.com hostname")
+    return hostname
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -61,7 +68,8 @@ FRESHDESK_TICKETS_PER_PAGE = 100
 if not FRESHDESK_DOMAIN or not FRESHDESK_API_KEY:
     raise ValueError("Missing FRESHDESK_DOMAIN or FRESHDESK_API_KEY in environment variables")
 
-BASE_URL = f"https://{FRESHDESK_DOMAIN}/api/v2"
+FRESHDESK_TENANT = FRESHDESK_DOMAIN.removesuffix(".freshdesk.com")
+BASE_URL = f"https://{FRESHDESK_TENANT}.freshdesk.com/api/v2"
 
 
 def _error_response(message: str, status_code: int | None = None) -> dict[str, Any]:
@@ -80,6 +88,10 @@ def _retry_after_seconds(response: requests.Response) -> int:
 
 def safe_request(method: str, endpoint: str, **kwargs) -> Any:
     """Perform one Freshdesk request with bounded retry for rate limits and I/O."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*", endpoint):
+        return _error_response("Freshdesk endpoint must be a relative API resource path")
+    # Callers cannot re-enable redirects or send the account credential elsewhere.
+    kwargs["allow_redirects"] = False
     retries = 3
     for attempt in range(retries):
         try:
@@ -90,6 +102,8 @@ def safe_request(method: str, endpoint: str, **kwargs) -> Any:
                 timeout=20,
                 **kwargs,
             )
+            if 300 <= response.status_code < 400:
+                return _error_response("Freshdesk redirects are not permitted", response.status_code)
             if response.status_code == 429 and attempt < retries - 1:
                 time.sleep(_retry_after_seconds(response))
                 continue

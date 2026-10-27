@@ -27,6 +27,16 @@ Environment variables take precedence. SSE stays on port 8001, binding to
 with reviewed authentication, TLS and network controls. This draft does not
 start or expose a service. It does not activate a Freshdesk account or tool call.
 
+`FRESHDESK_DOMAIN` must identify one `tenant.freshdesk.com` hostname, optionally
+written as its HTTPS root URL. Arbitrary hosts, IP addresses, credentials,
+ports, paths, query strings and fragments are rejected before requests.
+The tenant label is ASCII and limited to one DNS label. The API authority is
+constructed with the literal `.freshdesk.com` suffix, endpoints are relative
+API resource paths and query values remain structured parameters. Redirects
+are disabled and every 3xx response is returned as an error without a retry.
+This follows [Freshdesk's API domain/HTTPS requirements](https://developers.freshdesk.com/api/);
+custom CNAMEs are not supported for API calls.
+
 Logs go to stderr. Optional `FRESHDESK_LOG_FILE` enables an explicit UTF-8 file.
 Transport failures log their type and retry count rather than potentially
 sensitive request URLs or query strings. HTTP failure status codes remain logged.
@@ -41,8 +51,12 @@ availability claim.
 
 CI preserves the existing four mocked cases, compiles/lints source, records
 actual Python/PyYAML/LibYAML versions and audits the complete frozen graph with
-no advisory exclusions. No test cases are added, removed or relaxed. Preparation
+no advisory exclusions. The four original mocked cases are unchanged. A separate
+transport-security file adds invalid-authority/path and redirect cases without
+changing their original selection or helpers. Preparation
 runs no local application suite, native build, server or provider operation.
 Full image/native currency, Windows installation, real Freshdesk authentication,
 MCP transport/operator acceptance and Hetzner deployment remain unverified.
-The repository-wide Hetzner deployment directive continues to apply.
+Robert excluded this repository from Hetzner server hosting; the separate
+[hosting-exemption draft](https://github.com/Robert-Velhorst/040---Connected-Services-MCP-Hub/pull/91)
+records that decision. No deployment is part of this draft.

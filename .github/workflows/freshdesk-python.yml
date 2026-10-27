@@ -42,6 +42,8 @@ jobs:
           uv run --frozen --all-groups ruff check main.py
           uv run --frozen --all-groups python -m compileall -q main.py test_main.py
           uv run --frozen --all-groups python -m pytest -q test_main.py --junitxml=source-results.xml
+      - name: Execute additional outbound authority and redirect cases
+        run: uv run --frozen --all-groups python -m pytest -q test_transport_security.py --junitxml=transport-security-results.xml
       - name: Inspect the actual Python and native YAML runtime
         run: |
           uv run --frozen --all-groups python -c 'import json,sys,yaml; assert sys.version_info[:3] == (3,15,1); assert yaml.__with_libyaml__; print(json.dumps({"python":sys.version,"pyyaml":yaml.__version__,"libyaml":yaml._yaml.get_version_string(),"provider_acceptance":False}))' > native-runtime.json
@@ -56,6 +58,7 @@ jobs:
           name: freshdesk-stable-evidence
           path: |
             freshdesk/source-results.xml
+            freshdesk/transport-security-results.xml
             freshdesk/native-runtime.json
             freshdesk/requirements-audit.lock
             freshdesk/python-audit.json
