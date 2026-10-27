@@ -24,8 +24,8 @@ try:
     for stage,source in [('original',original_path),('patched',root/'trello/oauth_connect.py')]:
         report=out/(stage+'-cases.json');result=subprocess.run([sys.executable,'-B',str(root/'trello/test_oauth_callback_security.py'),'--source',str(source),'--report',str(report)],cwd=root/'trello',capture_output=True,text=True,timeout=120)
         (out/(stage+'-cases.log')).write_text(result.stdout+result.stderr);observed=json.loads(report.read_text());record[stage]=observed
-        assert observed['testsRun']==7 and observed['skipped']==0
-        if stage=='original':assert result.returncode!=0 and observed['failures']==4 and observed['errors']==1
+        assert observed['testsRun']==19 and observed['skipped']==0
+        if stage=='original':assert result.returncode!=0 and observed['failures']==13 and observed['errors']==2
         else:assert result.returncode==0 and observed['success']
     original_cases={}
     for name in git('ls-tree','-r','--name-only',base,'trello').decode().splitlines():

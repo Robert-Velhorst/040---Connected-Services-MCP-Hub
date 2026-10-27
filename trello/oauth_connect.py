@@ -98,7 +98,22 @@ class ConnectHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
 
+    def _local_request(self, require_origin: bool = False) -> bool:
+        hosts = self.headers.get_all("Host", [])
+        expected = {f"localhost:{self.server.server_port}", f"127.0.0.1:{self.server.server_port}"}
+        if self.server.server_port == 80:
+            expected.update({"localhost", "127.0.0.1"})
+        if len(hosts) != 1 or hosts[0].lower() not in expected:
+            return False
+        origins = self.headers.get_all("Origin", [])
+        if not origins:
+            return not require_origin
+        return len(origins) == 1 and origins[0] == "http://" + hosts[0].lower()
+
     def do_GET(self) -> None:  # noqa: N802
+        if not self._local_request():
+            self._response("Local request authority did not match.", HTTPStatus.FORBIDDEN, "text/plain; charset=utf-8")
+            return
         route = urlparse(self.path)
         if route.path in {"/", "/connect"}:
             app_key = load_settings().get("trello_app_key")
@@ -145,11 +160,38 @@ else {{ fetch("/complete", {{method:"POST",headers:{{"Content-Type":"application
         self._response("Not found", HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8")
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._local_request(require_origin=True):
+            self._response("Local request origin did not match.", HTTPStatus.FORBIDDEN, "text/plain; charset=utf-8")
+            return
         route = urlparse(self.path)
-        length = int(self.headers.get("Content-Length", "0"))
+        if route.path not in {"/setup", "/complete"}:
+            self._response("Not found", HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8")
+            return
+        content_type = self.headers.get_content_type()
+        expected_type = "application/json" if route.path == "/complete" else "application/x-www-form-urlencoded"
+        if content_type != expected_type:
+            self._response("Unsupported request content type.", HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "text/plain; charset=utf-8")
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if self.headers.get_all("Transfer-Encoding", []) or len(lengths) != 1:
+            self._response("A single bounded content length is required.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+            return
+        declared = lengths[0].strip()
+        if not declared.isascii() or not declared.isdigit():
+            self._response("Invalid content length.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+            return
+        length = int(declared)
+        if length > 4096:
+            self._response("Request body is too large.", HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "text/plain; charset=utf-8")
+            return
+        self.connection.settimeout(5)
         body = self.rfile.read(length)
         if route.path == "/setup":
-            app_key = parse_qs(body.decode("utf-8")).get("app_key", [""])[0].strip()
+            try:
+                app_key = parse_qs(body.decode("utf-8")).get("app_key", [""])[0].strip()
+            except UnicodeDecodeError:
+                self._response("Invalid setup form.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+                return
             if len(app_key) < 8:
                 self._response("Enter a valid Trello Power-Up API key.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
                 return
