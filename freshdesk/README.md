@@ -2,13 +2,18 @@
 
 The connector provides its existing eight account, search, ticket and ping tools.
 Python 3.15.1 and the complete runtime/dev/build graph are frozen in `uv.lock`.
-Direct runtime selections are FastMCP 4.1.3, Requests 2.34.2, python-dotenv 1.2.4,
+Direct runtime selections are FastMCP 4.1.4, Requests 2.34.2, python-dotenv 1.2.4,
 colorama 0.4.6 and typing-extensions 4.16.0. `requirements.txt` is the full hashed
 runtime export, preserving the existing pip installation entry point.
+The supported `py-key-value-aio[keyring]` extra is explicitly retained because
+FastMCP 4.1.4 stopped enabling it by default. Normal resolution preserves all
+81 previously installed package names while updating the seven current release
+targets. The backend import is checked without creating a store or accessing
+credentials. Original cases and assertions remain unchanged.
 
 ## Installation and configuration
 
-Use Python 3.15.1 and uv 0.13.5 in a new isolated environment, preserving any
+Use Python 3.15.1 and uv 0.13.6 in a new isolated environment, preserving any
 existing installation. PyYAML 6.0.3 has no CPython 3.15 wheels; a supported C
 compiler and LibYAML development headers must already be available. This source
 does not install an operator SDK. Ubuntu CI builds with the current hashed

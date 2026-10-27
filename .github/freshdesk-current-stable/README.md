@@ -10,10 +10,11 @@ credential is accessed or migrated. Owned hosted CI uses normal
 `uv lock --upgrade --prerelease=disallow`, with no dependency overrides,
 replacement packages or lower-version fallback, to determine the whole graph.
 
-The ordinary checked-in application manifest and frozen locks stay intact
-during preparation. The candidate job exports its actual resolved manifest,
-uv lock and hashed runtime/build/audit requirements for independent review
-and a later source freeze. No package lock is fabricated locally.
+The checked-in application manifest, uv lock and hashed runtime/build exports
+are frozen from the independently reconciled successful hosted run. The
+candidate job independently repeats normal resolution and retains its actual
+generated inputs for review. The ordinary frozen workflow uses the same
+current uv/setup-uv versions. No package lock is fabricated locally.
 
 All four original mocked cases and 47 additional transport cases run unchanged
 against the installed candidate. Complete original tracked payloads are hashed
