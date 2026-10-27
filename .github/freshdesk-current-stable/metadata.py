@@ -5,7 +5,7 @@ import hashlib
 import importlib.metadata
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -32,14 +32,16 @@ GENERATED = {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", choices=["prepare", "installed", "verify"], required=True)
-    parser.add_argument("--reports", type=Path, required=True)
     args = parser.parse_args()
     assert os.environ.get("GITHUB_ACTIONS") == "true"
     assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
     assert os.environ.get("RUNNER_OS") == "Linux"
-    root = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
-    reports = args.reports.resolve()
-    assert reports != root and not reports.is_relative_to(root)
+    # This helper owns exactly one checkout and one sibling report directory.
+    # Neither path is accepted through CLI arguments or the environment.
+    root = Path(__file__).resolve(strict=True).parents[2]
+    reports = root.parent / "freshdesk-current-stable-evidence"
+    assert not reports.is_symlink()
+    assert reports.resolve().parent == root.parent
     reports.mkdir(parents=True, exist_ok=True)
 
     def git(*values):
@@ -51,7 +53,12 @@ def main():
             if not item:
                 continue
             name = item.decode("utf-8")
-            path = root / name
+            relative = PurePosixPath(name)
+            if relative.is_absolute() or any(part in {".", ".."} for part in relative.parts):
+                raise ValueError("Tracked source path must stay inside the checkout")
+            path = root.joinpath(*(os.path.basename(part) for part in relative.parts))
+            if not path.parent.resolve(strict=True).is_relative_to(root):
+                raise ValueError("Tracked source parent escapes the checkout")
             data = os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
             result[name] = hashlib.sha256(data).hexdigest()
         return result

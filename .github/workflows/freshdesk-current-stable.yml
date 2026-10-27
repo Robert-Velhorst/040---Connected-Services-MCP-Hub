@@ -31,11 +31,11 @@ jobs:
           version: "0.13.6"
           enable-cache: true
           cache-dependency-glob: "freshdesk/uv.lock"
-      - name: Initialize reports inside the assigned runner temporary directory
+      - name: Initialize the fixed sibling report location
         shell: bash
-        run: printf 'REPORTS=%s/freshdesk-current-stable\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+        run: printf 'REPORTS=%s/../freshdesk-current-stable-evidence\n' "$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       - name: Bind original source and prepare the declared manifest
-        run: python ../.github/freshdesk-current-stable/metadata.py --phase prepare --reports "$REPORTS"
+        run: python ../.github/freshdesk-current-stable/metadata.py --phase prepare
       - name: Resolve and export the complete current stable graph normally
         run: |
           set -euo pipefail
@@ -68,14 +68,14 @@ jobs:
           python -m pip install pip-audit==2.10.1
           python -m pip_audit -r requirements-audit.lock --no-deps --disable-pip --strict -f json -o python-audit.json
       - name: Verify seven upgrades, retained keyring and release-only selections
-        run: uv run --frozen --all-groups python ../.github/freshdesk-current-stable/metadata.py --phase installed --reports "$REPORTS"
+        run: uv run --frozen --all-groups python ../.github/freshdesk-current-stable/metadata.py --phase installed
       - name: Preserve generated inputs and verify all original source after execution
         if: always()
-        run: python ../.github/freshdesk-current-stable/metadata.py --phase verify --reports "$REPORTS"
+        run: python ../.github/freshdesk-current-stable/metadata.py --phase verify
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: freshdesk-current-stable-evidence
-          path: ${{ runner.temp }}/freshdesk-current-stable/
+          path: ${{ github.workspace }}/../freshdesk-current-stable-evidence/
           retention-days: 7
           if-no-files-found: error

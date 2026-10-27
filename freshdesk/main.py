@@ -279,5 +279,6 @@ async def ping() -> dict[str, str]:
 
 if __name__ == "__main__":
     host = os.getenv("FRESHDESK_MCP_HOST", "127.0.0.1")
-    logger.info("Starting Freshdesk MCP connector on %s:8001", host)
+    log_host = host.replace("\r", "").replace("\n", "")
+    logger.info("Starting Freshdesk MCP connector on %s:8001", log_host)
     server.run(transport="sse", host=host, port=8001)
