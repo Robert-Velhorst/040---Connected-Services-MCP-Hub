@@ -12,7 +12,12 @@ import threading
 import unittest
 from urllib.parse import urlencode
 
-SOURCE = Path(__file__).with_name('oauth_connect.py')
+# The image mounts tests separately from the installed application. Resolve the
+# real application module through the same import path as the original cases.
+installed_spec = importlib.util.find_spec('oauth_connect')
+if installed_spec is None or installed_spec.origin is None:
+    raise RuntimeError('The installed OAuth consent module is unavailable')
+SOURCE = Path(installed_spec.origin)
 
 
 class CallbackStateTests(unittest.TestCase):
