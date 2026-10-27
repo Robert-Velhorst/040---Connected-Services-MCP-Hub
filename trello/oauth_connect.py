@@ -63,6 +63,19 @@ def save_settings(app_key: str) -> None:
     os.replace(temporary, path)
 
 
+def matches_pending_state(candidate: object, expected: str | None) -> bool:
+    # compare_digest rejects non-ASCII strings; malformed input must receive a
+    # normal rejection rather than tearing down the consent HTTP connection.
+    return (
+        isinstance(candidate, str)
+        and candidate.isascii()
+        and isinstance(expected, str)
+        and bool(expected)
+        and expected.isascii()
+        and secrets.compare_digest(candidate, expected)
+    )
+
+
 class ConnectHandler(BaseHTTPRequestHandler):
     server: "ConnectServer"
 
@@ -85,7 +98,22 @@ class ConnectHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
 
+    def _local_request(self, require_origin: bool = False) -> bool:
+        hosts = self.headers.get_all("Host", [])
+        expected = {f"localhost:{self.server.server_port}", f"127.0.0.1:{self.server.server_port}"}
+        if self.server.server_port == 80:
+            expected.update({"localhost", "127.0.0.1"})
+        if len(hosts) != 1 or hosts[0].lower() not in expected:
+            return False
+        origins = self.headers.get_all("Origin", [])
+        if not origins:
+            return not require_origin
+        return len(origins) == 1 and origins[0] == "http://" + hosts[0].lower()
+
     def do_GET(self) -> None:  # noqa: N802
+        if not self._local_request():
+            self._response("Local request authority did not match.", HTTPStatus.FORBIDDEN, "text/plain; charset=utf-8")
+            return
         route = urlparse(self.path)
         if route.path in {"/", "/connect"}:
             app_key = load_settings().get("trello_app_key")
@@ -112,7 +140,12 @@ class ConnectHandler(BaseHTTPRequestHandler):
 <form method=\"post\" action=\"/setup\"><label>Power-Up API key <input name=\"app_key\" required autocomplete=\"off\"></label><button>Continue to Trello</button></form>""")
             return
         if route.path == "/callback":
-            state = parse_qs(route.query).get("state", [""])[0]
+            supplied_state = parse_qs(route.query).get("state", [""])[0]
+            if not matches_pending_state(supplied_state, self.server.state):
+                self._response("Authorization state did not match.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+                return
+            # Render only the server-generated nonce, never callback query text.
+            state = self.server.state
             self._response(f"""<!doctype html><title>Connecting Trello</title><p id=\"status\">Finishing connection...</p>
 <script>
 const token = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -127,11 +160,38 @@ else {{ fetch("/complete", {{method:"POST",headers:{{"Content-Type":"application
         self._response("Not found", HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8")
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._local_request(require_origin=True):
+            self._response("Local request origin did not match.", HTTPStatus.FORBIDDEN, "text/plain; charset=utf-8")
+            return
         route = urlparse(self.path)
-        length = int(self.headers.get("Content-Length", "0"))
+        if route.path not in {"/setup", "/complete"}:
+            self._response("Not found", HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8")
+            return
+        content_type = self.headers.get_content_type()
+        expected_type = "application/json" if route.path == "/complete" else "application/x-www-form-urlencoded"
+        if content_type != expected_type:
+            self._response("Unsupported request content type.", HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "text/plain; charset=utf-8")
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if self.headers.get_all("Transfer-Encoding", []) or len(lengths) != 1:
+            self._response("A single bounded content length is required.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+            return
+        declared = lengths[0].strip()
+        if not declared.isascii() or not declared.isdigit():
+            self._response("Invalid content length.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+            return
+        length = int(declared)
+        if length > 4096:
+            self._response("Request body is too large.", HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "text/plain; charset=utf-8")
+            return
+        self.connection.settimeout(5)
         body = self.rfile.read(length)
         if route.path == "/setup":
-            app_key = parse_qs(body.decode("utf-8")).get("app_key", [""])[0].strip()
+            try:
+                app_key = parse_qs(body.decode("utf-8")).get("app_key", [""])[0].strip()
+            except UnicodeDecodeError:
+                self._response("Invalid setup form.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
+                return
             if len(app_key) < 8:
                 self._response("Enter a valid Trello Power-Up API key.", HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8")
                 return
@@ -146,7 +206,7 @@ else {{ fetch("/complete", {{method:"POST",headers:{{"Content-Type":"application
                 return
             token = payload.get("token") if isinstance(payload, dict) else None
             state = payload.get("state") if isinstance(payload, dict) else None
-            if not isinstance(token, str) or not isinstance(state, str) or not self.server.state or not secrets.compare_digest(state, self.server.state):
+            if not isinstance(token, str) or not matches_pending_state(state, self.server.state):
                 self._response(json.dumps({"error": "Authorization state did not match."}), HTTPStatus.BAD_REQUEST, "application/json")
                 return
             app_key = load_settings().get("trello_app_key")
