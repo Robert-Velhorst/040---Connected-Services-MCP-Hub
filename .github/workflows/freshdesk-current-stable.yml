@@ -1,0 +1,79 @@
+name: Freshdesk current stable graph
+on:
+  pull_request:
+    paths: ["freshdesk/**", ".github/freshdesk-current-stable/**", ".github/workflows/freshdesk-current-stable.yml"]
+  push:
+    branches: [main]
+    paths: ["freshdesk/**", ".github/freshdesk-current-stable/**", ".github/workflows/freshdesk-current-stable.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  normal-current-graph:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: freshdesk
+    env:
+      REPORTS: ${{ runner.temp }}/freshdesk-current-stable
+      PYTHONUTF8: "1"
+      PYYAML_FORCE_CYTHON: "1"
+      PYYAML_FORCE_LIBYAML: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15.1"
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.6"
+          enable-cache: true
+          cache-dependency-glob: "freshdesk/uv.lock"
+      - name: Bind original source and prepare the declared manifest
+        run: python ../.github/freshdesk-current-stable/metadata.py --phase prepare --reports "$REPORTS"
+      - name: Resolve and export the complete current stable graph normally
+        run: |
+          set -euo pipefail
+          uv --version > "$REPORTS/actual-uv-version.txt"
+          uv lock --upgrade --prerelease=disallow --python 3.15.1 2>&1 | tee "$REPORTS/normal-resolution.log"
+          uv export --frozen --only-group build --no-emit-project --format requirements-txt --output-file requirements-build.lock
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements.txt
+          uv tree --frozen --all-groups > "$REPORTS/resolved-tree.txt"
+      - name: Prepare native SDK only on the disposable runner
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libyaml-dev
+      - name: Seed the exact source-build toolchain
+        run: |
+          uv venv --python 3.15.1
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r requirements-build.lock
+      - name: Install the frozen graph with the selected PyYAML toolchain
+        run: uv sync --frozen --all-groups --no-build-isolation-package pyyaml --python 3.15.1
+      - name: Check source and execute the existing mocked cases
+        run: |
+          uv run --frozen --all-groups ruff check main.py
+          uv run --frozen --all-groups python -m compileall -q main.py test_main.py
+          uv run --frozen --all-groups python -m pytest -q test_main.py --junitxml=source-results.xml
+      - name: Execute additional outbound authority and redirect cases
+        run: uv run --frozen --all-groups python -m pytest -q test_transport_security.py --junitxml=transport-security-results.xml
+      - name: Inspect the actual Python and native YAML runtime
+        run: |
+          uv run --frozen --all-groups python -c 'import json,sys,yaml; assert sys.version_info[:3] == (3,15,1); assert yaml.__with_libyaml__; print(json.dumps({"python":sys.version,"pyyaml":yaml.__version__,"libyaml":yaml._yaml.get_version_string(),"provider_acceptance":False}))' > native-runtime.json
+      - name: Audit the complete frozen dependency graph without exclusions
+        run: |
+          uv export --frozen --all-groups --no-emit-project --format requirements-txt --output-file requirements-audit.lock
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit -r requirements-audit.lock --no-deps --disable-pip --strict -f json -o python-audit.json
+      - name: Verify all seven current installed identities and release-only selections
+        run: uv run --frozen --all-groups python ../.github/freshdesk-current-stable/metadata.py --phase installed --reports "$REPORTS"
+      - name: Preserve generated inputs and verify all original source after execution
+        if: always()
+        run: python ../.github/freshdesk-current-stable/metadata.py --phase verify --reports "$REPORTS"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: freshdesk-current-stable-evidence
+          path: ${{ runner.temp }}/freshdesk-current-stable/
+          retention-days: 7
+          if-no-files-found: error

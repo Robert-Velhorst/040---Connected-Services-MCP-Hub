@@ -1,0 +1,111 @@
+"""Guard an owned hosted normal-resolution candidate; never publish its outputs."""
+
+import argparse
+import hashlib
+import importlib.metadata
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+
+TARGETS = {
+    "cachetools": "7.2.6",
+    "cyclopts": "5.3.1",
+    "fastmcp": "4.1.4",
+    "fastmcp-slim": "4.1.4",
+    "ruff": "0.17.3",
+    "sse-starlette": "3.6.0",
+    "starlette": "1.10.0",
+}
+GENERATED = {
+    "freshdesk/pyproject.toml",
+    "freshdesk/uv.lock",
+    "freshdesk/requirements.txt",
+    "freshdesk/requirements-build.lock",
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--phase", choices=["prepare", "installed", "verify"], required=True)
+    parser.add_argument("--reports", type=Path, required=True)
+    args = parser.parse_args()
+    assert os.environ.get("GITHUB_ACTIONS") == "true"
+    assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+    assert os.environ.get("RUNNER_OS") == "Linux"
+    root = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
+    reports = args.reports.resolve()
+    assert reports != root and not reports.is_relative_to(root)
+    reports.mkdir(parents=True, exist_ok=True)
+
+    def git(*values):
+        return subprocess.check_output(["git", "-C", str(root), *values])
+
+    def payloads():
+        result = {}
+        for item in git("ls-files", "-z").split(b"\0"):
+            if not item:
+                continue
+            name = item.decode("utf-8")
+            path = root / name
+            data = os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
+            result[name] = hashlib.sha256(data).hexdigest()
+        return result
+
+    candidate = Path(__file__).with_name("pyproject.toml").read_bytes()
+    if args.phase == "prepare":
+        assert not git("status", "--porcelain").strip()
+        record = {
+            "worker_head": git("rev-parse", "HEAD").decode().strip(),
+            "worker_tree": git("rev-parse", "HEAD^{tree}").decode().strip(),
+            "source_payloads": payloads(),
+            "candidate_manifest_sha256": hashlib.sha256(candidate).hexdigest(),
+            "operator_data_read": False,
+        }
+        (reports / "source-before.json").write_text(json.dumps(record, indent=2) + "\n")
+        (root / "freshdesk/pyproject.toml").write_bytes(candidate)
+        return
+
+    if args.phase == "installed":
+        versions = {
+            re.sub(r"[-_.]+", "-", dist.metadata["Name"]).lower(): dist.version
+            for dist in importlib.metadata.distributions()
+        }
+        for name, version in TARGETS.items():
+            assert versions.get(name) == version, (name, versions.get(name), version)
+        assert all(re.fullmatch(r"(?:\d+!)?\d+(?:\.\d+)*(?:\.post\d+)?", value)
+                   for value in versions.values()), "Non-release version selected"
+        (reports / "actual-installed-package-versions.json").write_text(
+            json.dumps({"versions": versions, "required_targets": TARGETS,
+                        "full_native_SDK_image_provider_and_data_acceptance": False}, indent=2) + "\n"
+        )
+        return
+
+    before = json.loads((reports / "source-before.json").read_text())
+    after = payloads()
+    assert set(after) == set(before["source_payloads"])
+    changed = {name for name in after if after[name] != before["source_payloads"][name]}
+    assert changed <= GENERATED, changed
+    assert (root / "freshdesk/pyproject.toml").read_bytes() == candidate
+    diff_names = set(git("diff", "--name-only").decode().splitlines())
+    assert diff_names <= GENERATED, diff_names
+    for name in sorted(GENERATED):
+        shutil.copyfile(root / name, reports / Path(name).name)
+    for name in ["source-results.xml", "transport-security-results.xml", "native-runtime.json",
+                 "python-audit.json", "requirements-audit.lock"]:
+        path = root / "freshdesk" / name
+        if path.is_file():
+            shutil.copyfile(path, reports / name)
+    (reports / "source-after.json").write_text(json.dumps({
+        "source_payloads": after,
+        "changed_generated_inputs": sorted(changed),
+        "all_other_original_cases_helpers_assertions_fixtures_source_and_workflows_unchanged": True,
+        "normal_resolution_and_case_results_require_separate_success": True,
+    }, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    main()
