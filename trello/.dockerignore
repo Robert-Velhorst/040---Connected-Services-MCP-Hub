@@ -9,6 +9,7 @@ __pycache__/
 
 # Credentials are passed at run time via --env-file, never copied in.
 .env
+.env.*
 
 *.log
 *.db
