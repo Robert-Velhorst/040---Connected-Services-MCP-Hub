@@ -1,0 +1,5 @@
+# Pinned build tools for native wheels; builder stage only.
+pip==26.2.2
+setuptools==84.2.1
+wheel==0.48.0
+Cython==3.3.0
